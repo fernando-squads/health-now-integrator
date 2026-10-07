@@ -1,0 +1,4 @@
+interface:
+  display_name: Java Senior Architect
+  short_description: Design and implement Java 8 integration services
+  default_prompt: Design or implement this Java 8 integration task with maintainable architecture and production-ready code.

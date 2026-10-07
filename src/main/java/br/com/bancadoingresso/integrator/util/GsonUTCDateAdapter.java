@@ -1,0 +1,63 @@
+package br.com.bancadoingresso.integrator.util;
+
+import java.lang.reflect.Type;
+import java.text.DateFormat;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.Locale;
+import java.util.TimeZone;
+
+import com.google.gson.JsonDeserializationContext;
+import com.google.gson.JsonDeserializer;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonParseException;
+import com.google.gson.JsonPrimitive;
+import com.google.gson.JsonSerializationContext;
+import com.google.gson.JsonSerializer;
+
+public class GsonUTCDateAdapter implements JsonSerializer<Date>, JsonDeserializer<Date> {
+
+	private final DateFormat dateFormat;
+
+	public GsonUTCDateAdapter() {
+		dateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US);
+		dateFormat.setTimeZone(TimeZone.getTimeZone("UTC"));
+	}
+
+	@Override
+	public synchronized JsonElement serialize(Date date, Type type, JsonSerializationContext jsonSerializationContext) {
+		return new JsonPrimitive(dateFormat.format(date));
+	}
+
+	@Override
+	public synchronized Date deserialize(JsonElement jsonElement, Type type,
+			JsonDeserializationContext jsonDeserializationContext) {
+		try {
+			String s = jsonElement.getAsString();
+			SimpleDateFormat sdf = null;
+			s = s.split("\\+")[0];
+			if (s != null) {
+				if (s.trim().length() == 10) {
+					sdf = new SimpleDateFormat("yyyy-MM-dd");
+				} else {
+					sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS");
+				}
+				Date date = sdf.parse(s);
+				Calendar calendar = Calendar.getInstance();
+				calendar.setTime(date);
+				if (s.trim().length() > 10) {
+					calendar.add(Calendar.HOUR, -3);
+				}
+				return calendar.getTime();
+			} else {
+				return null;
+			}
+			
+		} catch (ParseException e) {
+			throw new JsonParseException(e);
+		}
+	}
+}
+

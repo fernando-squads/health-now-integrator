@@ -1,0 +1,4 @@
+interface:
+  display_name: "PostgreSQL Senior DBA"
+  short_description: "Design and operate reliable PostgreSQL databases"
+  default_prompt: "Use $postgres-senior-dba to analyze this PostgreSQL database task."

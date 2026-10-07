@@ -1,0 +1,4 @@
+interface:
+  display_name: "Senior QA Engineer"
+  short_description: "Plan and verify quality for Java integrations"
+  default_prompt: "Use $qa-senior to create a risk-based test plan for this change."
