@@ -12,15 +12,15 @@ import br.com.bancadoingresso.integrator.model.Cidadao;
 
 public class CidadaoJDBC extends AbstractJDBC {
 	private static final Logger LOGGER = Logger.getLogger(CidadaoJDBC.class.getName());
+	private static final String FIND_ALL_QUERY = "/queries/cidadao/find-all.sql";
 	
-	public CidadaoJDBC() {
+	public CidadaoJDBC() throws SQLException {
 		super();
 	}
 
 	public List<Cidadao> getAll() throws SQLException {
 		List<Cidadao> cidadoes = new ArrayList<Cidadao>();
-		String sql = "SELECT *"
-				   + "  FROM public.tb_cidadao";
+		String sql = SqlQueryLoader.load(FIND_ALL_QUERY);
 		try (PreparedStatement ps = con.prepareStatement(sql)){
 			ResultSet rs = ps.executeQuery();
 			while (rs.next()) {

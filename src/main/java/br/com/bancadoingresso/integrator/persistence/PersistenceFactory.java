@@ -1,5 +1,7 @@
 package br.com.bancadoingresso.integrator.persistence;
 
+import java.sql.SQLException;
+
 import br.com.bancadoingresso.integrator.persistence.jdbc.CidadaoJDBC;
 
 public class PersistenceFactory {
@@ -17,7 +19,7 @@ public class PersistenceFactory {
 		return instance;
 	}
 	
-	public CidadaoJDBC getCidadaoJDBC() {
+	public CidadaoJDBC getCidadaoJDBC() throws SQLException {
 		if(cidadaoJDBC == null) {
 			cidadaoJDBC = new CidadaoJDBC();
 		}

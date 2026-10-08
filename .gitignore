@@ -21,3 +21,8 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Local extraction artifacts (contain sensitive source data)
+exports/
+*.jsonl
+*.zip

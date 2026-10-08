@@ -1,4 +1,4 @@
-package br.com.bancadoingresso.integrator.api.view;
+package br.com.bancadoingresso.integrator.view;
 
 import java.io.BufferedReader;
 import java.io.IOException;
