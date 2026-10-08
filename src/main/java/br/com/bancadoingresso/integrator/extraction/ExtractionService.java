@@ -24,7 +24,7 @@ public final class ExtractionService {
         connection.setReadOnly(true);
         connection.setTransactionIsolation(Connection.TRANSACTION_REPEATABLE_READ);
         connection.setAutoCommit(false);
-        String runId = UUID.randomUUID().toString();
+        String runId = options.runId == null ? UUID.randomUUID().toString() : options.runId;
         String fileId = UUID.randomUUID().toString();
         LoadFileWriter writer = new LoadFileWriter();
         Path directory = writer.createRunDirectory(options.output, runId);

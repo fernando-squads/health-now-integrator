@@ -1,5 +1,4 @@
 package br.com.bancadoingresso.integrator.service;
-
 import br.com.bancadoingresso.integrator.api.*;
 import br.com.bancadoingresso.integrator.extraction.*;
 import com.google.gson.*;
@@ -7,165 +6,101 @@ import org.junit.*;
 import org.junit.rules.TemporaryFolder;
 import java.io.*;
 import java.nio.file.*;
-import java.time.LocalDate;
+import java.time.*;
 import java.util.*;
-import java.lang.reflect.Proxy;
-import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.model.*;
-import software.amazon.awssdk.core.sync.RequestBody;
 import static org.junit.Assert.*;
 
 public class DeliveryTest {
     @Rule public TemporaryFolder temporary = new TemporaryFolder();
-    private Path archive;
+    private LoadArtifact artifact;
     private int generated, uploads, registrations;
-    private boolean uploadFails, registrationFails;
+    private boolean failUpload, failConfirm, registered, expired;
+    private String destination = "https://synthetic.invalid/", prefix = "loads";
+    private final String receipt = UUID.randomUUID().toString();
     private final List<String> identities = new ArrayList<String>();
-
-    @Before public void createArtifact() throws Exception {
-        LoadFileWriter writer = new LoadFileWriter();
-        String fileId = UUID.randomUUID().toString(), runId = UUID.randomUUID().toString();
-        Path directory = writer.createRunDirectory(temporary.getRoot().toPath(), runId);
-        JsonObject manifest = new JsonObject();
-        manifest.addProperty("file_id", fileId);
-        manifest.addProperty("run_id", runId);
-        manifest.addProperty("installation_id", "synthetic-installation");
-        for (String key : Arrays.asList("scope", "extraction_cutoff", "source_version", "mapping_version", "schema_version")) {
-            manifest.addProperty(key, "synthetic");
-        }
-        Path manifestFile = directory.resolve("manifest.json");
-        writer.json(manifestFile, manifest);
-        Path zip = writer.archive(directory, fileId, Arrays.asList(manifestFile));
-        Map<String, Object> metadata = writer.metadata(zip);
-        metadata.put("file_id", fileId);
-        metadata.put("run_id", runId);
-        writer.json(directory.resolve("archive.json"), metadata);
-        archive = writer.complete(directory, runId).resolve(zip.getFileName());
+    @Before public void setup() throws Exception { artifact = createArtifact(temporary.getRoot().toPath()); }
+    public static LoadArtifact createArtifact(Path output) throws Exception {
+        LoadFileWriter writer = new LoadFileWriter(); String run = UUID.randomUUID().toString(), file = UUID.randomUUID().toString();
+        Path dir = writer.createRunDirectory(output, run); JsonObject manifest = new JsonObject();
+        manifest.addProperty("run_id", run); manifest.addProperty("file_id", file); manifest.addProperty("installation_id", UUID.randomUUID().toString());
+        manifest.addProperty("scope", "synthetic"); manifest.addProperty("extraction_cutoff", "2026-01-01");
+        manifest.addProperty("source_version", "5.5.22"); manifest.addProperty("mapping_version", "esus-local-1"); manifest.addProperty("schema_version", "local-jsonl-1");
+        Path json = dir.resolve("manifest.json"); writer.json(json, manifest);
+        Path zip = writer.archive(dir, file, Arrays.asList(json)); Map<String, Object> metadata = writer.metadata(zip);
+        metadata.put("file_id", file); metadata.put("run_id", run); writer.json(dir.resolve("archive.json"), metadata);
+        return LoadArtifact.read(writer.complete(dir, run).resolve(zip.getFileName()));
     }
-
-    private IntegratorService service(LoadRegistrar registrar) {
-        return new IntegratorService((options, status) -> { generated++; return archive; }, new LoadStorage() {
-            public void validateConfiguration(String installation) {}
-            public String destination(LoadArtifact artifact) { return "s3://synthetic-bucket/" + artifact.fileId; }
-            public String objectKey(LoadArtifact artifact) { return artifact.fileId; }
-            public void upload(LoadArtifact artifact) throws IOException {
-                uploads++;
-                if (uploadFails) throw new IOException("Synthetic upload failure");
+    public static String objectKey(LoadArtifact a) { return "loads/" + a.installationId + "/" + a.runId + "/" + a.fileId + ".zip"; }
+    public static JsonObject authorization(LoadArtifact a, String base) {
+        JsonObject response = new JsonObject(), headers = new JsonObject();
+        response.addProperty("file_id", a.fileId); response.addProperty("run_id", a.runId); response.addProperty("state", "created");
+        response.addProperty("object_key", objectKey(a)); response.addProperty("upload_url", base + "/" + objectKey(a) + "?signature=synthetic-capability");
+        response.addProperty("expires_at", Instant.now().plusSeconds(300).toString());
+        headers.addProperty("content-type", "application/zip"); headers.addProperty("content-length", Long.toString(a.size));
+        headers.addProperty("if-none-match", "*"); headers.addProperty("x-amz-checksum-sha256", a.checksumBase64());
+        headers.addProperty("x-amz-meta-file-id", a.fileId); headers.addProperty("x-amz-meta-run-id", a.runId);
+        headers.addProperty("x-amz-meta-installation-id", a.installationId); headers.addProperty("x-amz-server-side-encryption", "AES256");
+        response.add("required_headers", headers); return response;
+    }
+    public static JsonObject status(LoadArtifact a, String receipt) {
+        JsonObject response = new JsonObject(); response.addProperty("file_id", a.fileId); response.addProperty("run_id", a.runId);
+        response.addProperty("installation_id", a.installationId); response.addProperty("sha256", a.sha256); response.addProperty("size_bytes", a.size);
+        response.addProperty("object_key", objectKey(a)); response.addProperty("state", receipt == null ? "upload_authorized" : "registered");
+        response.addProperty("receipt_id", receipt); response.addProperty("expires_at", Instant.now().plusSeconds(300).toString()); return response;
+    }
+    private IntegratorService service() {
+        FileDeliveryAPI api = new FileDeliveryAPI() {
+            public String destination() { return destination; }
+            public void preflight(String i, String r) { assertEquals(artifact.runId, r); }
+            public FileStatus status(LoadArtifact a) throws IOException {
+                if (identities.isEmpty()) return null;
+                JsonObject body = DeliveryTest.status(a, registered ? receipt : null);
+                body.addProperty("object_key", objectKey(a).replace("loads/", prefix + "/"));
+                if (expired) body.addProperty("expires_at", Instant.now().minusSeconds(1).toString());
+                return new FileStatus(body, a);
             }
-        }, registrar);
-    }
-
-    private LoadRegistrar registrar() {
-        return new LoadRegistrar() {
-            public void validateConfiguration() {}
-            public String destination() { return "synthetic-registration-api"; }
-            public String register(LoadArtifact artifact, String key, String idempotency) throws IOException {
-                registrations++;
-                identities.add(idempotency);
-                assertTrue(uploads > 0);
-                if (registrationFails) throw new IOException("Synthetic lost registration response");
-                return "synthetic-receipt";
+            public UploadAuthorization authorize(LoadArtifact a, String operation, String key) throws IOException {
+                assertEquals(64, key.length()); identities.add(operation + key); expired = false;
+                return new UploadAuthorization(authorization(a, "https://synthetic.s3.us-east-1.amazonaws.com"), a);
+            }
+            public FileStatus confirm(LoadArtifact a, String k, String o, String i) throws IOException {
+                registrations++; registered = true;
+                if (failConfirm) throw new IOException("Synthetic lost response");
+                return new FileStatus(DeliveryTest.status(a, receipt), a);
             }
         };
+        return new IntegratorService((o,s) -> {generated++; return artifact.path;}, api, (a,u) -> {uploads++; if(failUpload) throw new IOException("Synthetic upload failure");});
     }
-
-    private ExtractionOptions options() {
-        return new ExtractionOptions(temporary.getRoot().toPath(), "synthetic-installation", LocalDate.now(), 10, 30);
+    private ExtractionOptions options() { return new ExtractionOptions(temporary.getRoot().toPath(), artifact.installationId, LocalDate.now(), 10, 30, artifact.runId); }
+    @Test public void failedUploadNeverConfirmsAndRetainsArchive() throws Exception {
+        IntegratorService service = service(); failUpload = true;
+        try {service.integrate(options(),s -> {}); fail();} catch(IOException expected) {}
+        assertEquals(0, registrations); assertEquals(artifact.path, service.pendingArchive());
+        failUpload = false; service.integrate(options(),s -> {}); assertEquals(1, generated); assertEquals(identities.get(0), identities.get(1));
     }
-
-    @Test public void uploadFailureDoesNotNotifyAndRetryKeepsArchive() throws Exception {
-        IntegratorService service = service(registrar());
-        uploadFails = true;
-        try { service.integrate(options(), s -> {}); fail(); } catch (IOException expected) {}
-        assertEquals(0, registrations);
-        assertEquals(archive, service.pendingArchive());
-        uploadFails = false;
-        service.integrate(options(), s -> {});
-        assertEquals(1, generated);
-        assertEquals(1, registrations);
-        assertNull(service.pendingArchive());
+    @Test public void lostConfirmationResponseRecoversReceiptWithoutUploadingAgain() throws Exception {
+        failConfirm = true;
+        try {service().integrate(options(),s -> {}); fail();} catch(IOException expected) {}
+        failConfirm = false; service().resume(artifact.path,s -> {});
+        assertEquals(1, generated); assertEquals(1, uploads); assertEquals(1, registrations);
     }
-
-    @Test public void lostApiResponseResumesWithSameIdentityAcrossRestart() throws Exception {
-        registrationFails = true;
-        try { service(registrar()).integrate(options(), s -> {}); fail(); } catch (IOException expected) {}
-        registrationFails = false;
-        service(registrar()).resume(archive, s -> {});
-        assertEquals(1, generated);
-        assertEquals(identities.get(0), identities.get(1));
-        service(registrar()).resume(archive, s -> {});
-        assertEquals(2, registrations);
-        assertEquals(2, uploads);
+    @Test public void expiredAuthorizationRenewsIdentityButNotArchive() throws Exception {
+        failUpload = true;
+        try {service().integrate(options(),s -> {}); fail();} catch(IOException expected) {}
+        failUpload = false; expired = true; service().resume(artifact.path,s -> {});
+        assertEquals(1, generated); assertNotEquals(identities.get(0), identities.get(1));
     }
-
-    @Test public void unsupportedApiFailsBeforeGenerationOrUpload() throws Exception {
-        try { service(new FileAvailabilityAPI()).integrate(options(), s -> {}); fail(); }
-        catch (IOException expected) { assertTrue(expected.getMessage().contains("endpoint")); }
-        assertEquals(0, generated);
-        assertEquals(0, uploads);
-    }
-
-    @Test public void changedReceiptCannotUpload() throws Exception {
-        Path receipt = archive.resolveSibling("archive.json");
-        Files.write(receipt, "{}".getBytes(java.nio.charset.StandardCharsets.UTF_8));
-        try { service(registrar()).resume(archive, s -> {}); fail(); } catch (IOException expected) {}
-        assertEquals(0, uploads);
-    }
-
-    @Test public void destinationChangeOnRetryIsRejected() throws Exception {
-        registrationFails = true;
-        try { service(registrar()).integrate(options(), s -> {}); fail(); } catch (IOException expected) {}
-        LoadRegistrar other = new LoadRegistrar() {
-            public void validateConfiguration() {}
-            public String destination() { return "another-api"; }
-            public String register(LoadArtifact a, String k, String i) { fail(); return null; }
-        };
-        try { service(other).resume(archive, s -> {}); fail(); }
-        catch (IOException expected) { assertTrue(expected.getMessage().contains("conflicts")); }
+    @Test public void destinationAndObjectKeyCannotChangeOnResume() throws Exception {
+        failUpload = true; try {service().integrate(options(),s -> {}); fail();} catch(IOException expected) {}
+        failUpload = false; destination = "https://other.invalid/";
+        try {service().resume(artifact.path,s -> {}); fail();} catch(IOException expected) {}
+        destination = "https://synthetic.invalid/"; prefix = "other";
+        try {service().resume(artifact.path,s -> {}); fail();} catch(IOException expected) {}
         assertEquals(1, uploads);
     }
-
-    private S3Client client(LoadArtifact artifact, boolean existing, boolean mismatch) {
-        return (S3Client) Proxy.newProxyInstance(getClass().getClassLoader(), new Class<?>[] {S3Client.class},
-            (proxy, method, args) -> {
-                if ("putObject".equals(method.getName())) {
-                    PutObjectRequest request = (PutObjectRequest) args[0];
-                    assertEquals("*", request.ifNoneMatch());
-                    assertEquals(ServerSideEncryption.AES256, request.serverSideEncryption());
-                    assertEquals(artifact.checksumBase64(), request.checksumSHA256());
-                    assertEquals("loads/" + artifact.installationId + "/" + artifact.runId + "/" + artifact.fileId + ".zip", request.key());
-                    assertEquals(artifact.size, ((RequestBody) args[1]).optionalContentLength().get().longValue());
-                    if (existing) throw S3Exception.builder().statusCode(412).message("private-provider-error").build();
-                    return PutObjectResponse.builder().build();
-                }
-                if ("headObject".equals(method.getName())) {
-                    assertEquals(ChecksumMode.ENABLED, ((HeadObjectRequest) args[0]).checksumMode());
-                    Map<String, String> metadata = new HashMap<String, String>();
-                    metadata.put("file-id", artifact.fileId);
-                    metadata.put("run-id", artifact.runId);
-                    metadata.put("installation-id", artifact.installationId);
-                    return HeadObjectResponse.builder().contentLength(artifact.size).metadata(metadata)
-                        .checksumSHA256(mismatch ? "invalid" : artifact.checksumBase64()).build();
-                }
-                throw new AssertionError("Unexpected SDK method: " + method.getName());
-            });
-    }
-
-    @Test public void officialSdkRequestsUseChecksumEncryptionAndConditionalPut() throws Exception {
-        LoadArtifact artifact = LoadArtifact.read(archive);
-        new S3Service(client(artifact, false, false), "synthetic-bucket", "loads", "us-east-1").upload(artifact);
-    }
-
-    @Test public void existingMatchingS3ObjectIsReconciled() throws Exception {
-        LoadArtifact artifact = LoadArtifact.read(archive);
-        new S3Service(client(artifact, true, false), "synthetic-bucket", "loads", "us-east-1").upload(artifact);
-    }
-
-    @Test public void existingDifferentS3ObjectFails() throws Exception {
-        LoadArtifact artifact = LoadArtifact.read(archive);
-        try {
-            new S3Service(client(artifact, true, true), "synthetic-bucket", "loads", "us-east-1").upload(artifact);
-            fail();
-        } catch (IOException expected) { assertTrue(expected.getMessage().contains("conflicts")); }
+    @Test public void journalContainsNoCapabilityOrCredential() throws Exception {
+        service().integrate(options(),s -> {});
+        String journal = new String(Files.readAllBytes(artifact.path.resolveSibling("delivery.json")), java.nio.charset.StandardCharsets.UTF_8);
+        for(String forbidden : new String[]{"synthetic-capability", "upload_url", "access_token", "password", "signature", "public_key"}) assertFalse(journal.contains(forbidden));
     }
 }

@@ -7,8 +7,9 @@ After the Swing connection succeeds, `ExtractionService` uses a dedicated connec
 repeatable-read transaction. Every page and count observes that same snapshot.
 The service ends the transaction before compression. The caller closes the connection.
 
-Java 8 is required. No framework or S3 upload is involved. This implements local
-extraction and file generation, not downstream consolidation or authorization.
+Java 8 is required. This component implements local extraction and file generation,
+not downstream consolidation. The Swing workflow now uses `IntegratorService` to
+authorize delivery, upload to S3 and confirm API custody; see `LOAD_DELIVERY.md`.
 
 ## Components
 
@@ -168,14 +169,16 @@ files are owner-readable/writable and the completed ZIP is owner-readable only.
 Consumers must verify checksums; filesystem permissions alone are not tamper-proof storage.
 
 Output is ignored by Git. Keep customized output directories outside source control.
-The local `local-jsonl-1` format is an implementation format, not an approved S3/API
-transport contract. Do not treat successful local generation as server publication.
+The `local-jsonl-1` / `esus-local-1` format is accepted by the file transport only
+with a compatible approved run/cut. Transport acceptance is not clinical mapping
+homologation. Do not treat local generation or API custody as server publication.
 
 ## Configuration and validation
 
 System properties:
 - `integrator.output`: output directory (default `exports`).
 - `integrator.installation`: installation ID (default `local-esus`, local testing only).
+- `integrator.run`: authorized receiving run UUID, required for delivery.
 - `integrator.cutoff`: inclusive date, default today in the local timezone.
 - `integrator.pageSize`: 1–10000, default 1000.
 - `integrator.timeoutSeconds`: per-query timeout, default 30.
@@ -192,7 +195,7 @@ The local schema was inspected on 2026-10-08; institutional/domain homologation 
 mvn test
 mvn -Desus.integration=true test
 mvn clean package
-java -Dintegrator.installation=municipal-installation-id \
+java -Dintegrator.api=https://api.example.invalid \
   -Dintegrator.cutoff=2026-10-08 \
   -jar target/integrator-1.0.0-jar-with-dependencies.jar
 ```
@@ -205,6 +208,7 @@ record counts, identifier formats, hashes and ZIP membership.
 Unit tests cover missing resources, allowlisted projections, UTF-8/null output,
 overwrite prevention, invalid configuration and safe failure without a completed artifact.
 
-Validation in this environment used JDK 1.8.0_202 `javac` and JUnitCore because
-`mvn` was not installed on PATH. Maven package execution and visual Swing behavior
-were not verified here.
+Maven verification uses JDK 1.8.0_202 and a locally installed Maven executable.
+Synthetic extraction and delivery tests run without external AWS or patient data.
+Real e-SUS tests were not rerun for secure delivery. Visual Swing behavior and
+Windows ACL enforcement still require platform validation before rollout.

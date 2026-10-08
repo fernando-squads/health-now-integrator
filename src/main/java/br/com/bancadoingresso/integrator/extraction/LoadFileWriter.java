@@ -20,14 +20,16 @@ public final class LoadFileWriter {
         if (Files.getFileStore(output).supportsFileAttributeView("posix")) {
             return Files.createDirectory(path, PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwx------")));
         }
-        return Files.createDirectory(path);
+        Files.createDirectory(path);
+        br.com.bancadoingresso.integrator.util.ProtectedFiles.restrict(path);
+        return path;
     }
 
     public BufferedWriter open(Path path) throws IOException {
         if (Files.getFileStore(path.getParent()).supportsFileAttributeView("posix")) {
             Files.createFile(path, PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------")));
         } else {
-            Files.createFile(path);
+            br.com.bancadoingresso.integrator.util.ProtectedFiles.createFile(path);
         }
         return Files.newBufferedWriter(path, StandardCharsets.UTF_8, StandardOpenOption.WRITE);
     }
@@ -67,7 +69,7 @@ public final class LoadFileWriter {
 
     public Path archive(Path directory, String fileId, List<Path> files) throws IOException {
         Path archive = directory.resolve(fileId + ".zip");
-        Files.createFile(archive);
+        br.com.bancadoingresso.integrator.util.ProtectedFiles.createFile(archive);
         try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(archive), StandardCharsets.UTF_8)) {
             for (Path file : files) {
                 ZipEntry entry = new ZipEntry(file.getFileName().toString());

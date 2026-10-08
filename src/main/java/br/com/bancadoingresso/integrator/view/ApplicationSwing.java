@@ -8,13 +8,12 @@ import java.awt.GridBagLayout;
 import java.awt.Insets;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.sql.Connection;
-import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.List;
 import java.nio.file.Path;
 import br.com.bancadoingresso.integrator.extraction.ExtractionOptions;
-import br.com.bancadoingresso.integrator.extraction.ExtractionService;
+import br.com.bancadoingresso.integrator.service.IntegratorService;
+import javax.swing.JFileChooser;
 
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
@@ -32,7 +31,6 @@ import javax.swing.SwingUtilities;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 
-import br.com.bancadoingresso.integrator.persistence.ConnectionFactory;
 import br.com.bancadoingresso.integrator.util.DatabaseProperties;
 
 public class ApplicationSwing {
@@ -47,6 +45,8 @@ public class ApplicationSwing {
 	private JTextArea errorTextArea;
 	private JButton backButton;
 	private JPanel integrationPanel;
+	private InstallationForm installationForm;
+	private Path pendingArchive;
 
 	public void start() {
 		SwingUtilities.invokeLater(new Runnable() {
@@ -91,15 +91,32 @@ public class ApplicationSwing {
 		addField(panel, constraints, 3, "Banco de dados:", databaseField);
 		addField(panel, constraints, 4, "Usuário:", userField);
 		addField(panel, constraints, 5, "Senha:", passwordField);
+		installationForm = new InstallationForm();
+		constraints.gridx = 0; constraints.gridy = 6; constraints.gridwidth = 2;
+		constraints.fill = GridBagConstraints.HORIZONTAL; panel.add(installationForm, constraints);
 		addNextButton(panel, constraints, nextButton);
-		updateNextButtonState(nextButton, urlField, portField, databaseField, userField, passwordField);
-		addRequiredFieldListener(nextButton, urlField, portField, databaseField, userField, passwordField);
+		JTextField[] required = {urlField, portField, databaseField, userField, passwordField,
+            installationForm.api, installationForm.installation, installationForm.run, installationForm.keyPath, installationForm.password};
+		updateNextButtonState(nextButton, required);
+		addRequiredFieldListener(nextButton, required);
 		nextButton.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent event) {
 				showIntegrationScreen(cards);
 				testDatabaseConnection(urlField.getText().trim(), portField.getText().trim(),
-						databaseField.getText().trim(), userField.getText().trim(), passwordField.getPassword());
+						databaseField.getText().trim(), userField.getText().trim(), passwordField.getPassword(), installationForm.capture(), pendingArchive);
+				passwordField.setText("");
+			}
+		});
+		JButton resume = new JButton("Retomar arquivo...");
+		constraints.gridx = 0; constraints.gridy = 8; constraints.gridwidth = 2;
+		panel.add(resume, constraints);
+		resume.addActionListener(event -> {
+			JFileChooser chooser = new JFileChooser();
+			chooser.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("Arquivo de carga ZIP", "zip"));
+			if (chooser.showOpenDialog(panel) == JFileChooser.APPROVE_OPTION) {
+				showIntegrationScreen(cards);
+				testDatabaseConnection("", "", "", "", new char[0], installationForm.capture(), chooser.getSelectedFile().toPath());
 			}
 		});
 
@@ -170,27 +187,32 @@ public class ApplicationSwing {
 	}
 
 	private void testDatabaseConnection(final String url, final String port, final String database, final String user,
-			final char[] password) {
+			final char[] password, final InstallationForm.Input input, final Path resume) {
 		new SwingWorker<Void, String>() {
 			private String errorMessage;
 			private Path archive;
 
 			@Override
 			protected Void doInBackground() {
+				IntegratorService service = null;
 				try {
-					DatabaseProperties.creatInstance(url, port, database, user, new String(password));
-					try (Connection connection = ConnectionFactory.openExtractionConnection()) {
-					if (!connection.isValid(5)) {
-						throw new SQLException("The database connection could not be validated.");
-					}
-					archive = new ExtractionService().extract(connection, ExtractionOptions.fromSystemProperties(),
-						message -> publish(message));
+					publish("Autenticando instalação");
+					service = input.connect();
+					if (resume != null) { archive = service.resume(resume, message -> publish(message)); }
+					else {
+						DatabaseProperties.creatInstance(url, port, database, user, new String(password));
+						ExtractionOptions defaults = ExtractionOptions.fromSystemProperties();
+						ExtractionOptions options = new ExtractionOptions(defaults.output, input.installation, defaults.cutoff,
+							defaults.pageSize, defaults.timeoutSeconds, input.run);
+						archive = service.integrate(options, message -> publish(message));
 					}
 				} catch (Exception e) {
-					errorMessage = e instanceof SQLException ? e.getMessage()
-                        : "Não foi possível gerar a carga. Verifique a configuração e o diretório de saída.";
+					errorMessage = e instanceof java.io.IOException ? e.getMessage()
+                        : "Integração não confirmada. Verifique a configuração, a autorização e a conexão com o banco.";
 				} finally {
 					Arrays.fill(password, '\0');
+					input.clear();
+					if (service != null) pendingArchive = service.pendingArchive();
 				}
 				return null;
 			}
@@ -204,7 +226,8 @@ public class ApplicationSwing {
 			protected void done() {
 				if (errorMessage == null) {
 					showConnectionSuccess();
-					errorTextArea.setText("Arquivo gerado: " + archive.toAbsolutePath());
+					errorTextArea.setText("Arquivo registrado: " + archive.toAbsolutePath()
+                        + "\nO registro não significa que a carga foi processada ou publicada.");
 					errorScrollPane.setVisible(true);
 					backButton.setVisible(true);
 					integrationPanel.revalidate();
@@ -218,7 +241,7 @@ public class ApplicationSwing {
 	private void showConnectionSuccess() {
 		integrationProgressBar.setIndeterminate(false);
 		integrationProgressBar.setValue(100);
-		integrationStatusLabel.setText("Arquivos gerados com sucesso");
+		integrationStatusLabel.setText("Arquivo registrado; aguardando processamento");
 	}
 
 	public void showIntegrationError(final String errorMessage) {
@@ -285,7 +308,7 @@ public class ApplicationSwing {
 
 	private void addNextButton(JPanel panel, GridBagConstraints constraints, JButton nextButton) {
 		constraints.gridx = 1;
-		constraints.gridy = 6;
+		constraints.gridy = 7;
 		constraints.gridwidth = 1;
 		constraints.weightx = 1;
 		constraints.anchor = GridBagConstraints.EAST;

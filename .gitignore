@@ -31,3 +31,9 @@ Thumbs.db
 exports/
 *.jsonl
 *.zip
+*.jceks
+*.jceks.lock
+.identity-*
+*.p12
+*.key
+installation-local/

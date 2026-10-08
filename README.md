@@ -29,11 +29,15 @@ O projeto utiliza o driver JDBC do PostgreSQL (`org.postgresql:postgresql`).
 
 Após informar a conexão e clicar em Próximo, o integrador consulta o banco em modo
 somente leitura e gera arquivos JSONL, manifesto, relatório de reconciliação e um ZIP
-em `exports/<run_id>/`. O andamento aparece na tela. Não há envio ao S3 nesta etapa.
+em `exports/<run_id>/`. Informe também a API HTTPS, instalação e execução autorizada.
+No primeiro uso, ative a identidade com o código emitido pelo administrador e uma
+senha local forte. O andamento aparece na tela.
 
 Configuração, consultas, relacionamentos e testes: [Database extraction](docs/DATABASE_EXTRACTION.md).
 
-O `IntegratorService` também possui orquestração de entrega, SDK oficial AWS S3 e
-retomada por arquivo. A notificação depende de um endpoint ainda ausente no
-`health-now-api`; o fluxo integrado bloqueia antes do upload enquanto esse contrato
-não existir. Veja [Load delivery](docs/LOAD_DELIVERY.md) para configuração e análise das rotas.
+O `IntegratorService` solicita uma autorização temporária à API, envia o ZIP ao S3
+e confirma sua disponibilidade. O JAR não utiliza `.env`, credenciais AWS ou login
+ADM. A chave individual é gerada e protegida localmente. Use **Retomar ZIP** para
+recuperar uma entrega sem gerar outro arquivo. Registro não significa carga
+processada: o processamento pertence ao Scheduler.
+Veja [Load delivery](docs/LOAD_DELIVERY.md) e [Architecture](docs/ARCHITECTURE.md).

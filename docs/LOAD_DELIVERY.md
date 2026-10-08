@@ -1,136 +1,111 @@
-# Load generation and delivery
+# Secure installation-bound delivery
 
-## Implemented integrator behavior
+## Provisioning and activation
 
-`IntegratorService.integrate(options, status)` orchestrates configuration validation,
-archive generation through `ExtractionService` and `ConnectionFactory`, verified S3
-upload, then API registration through the `LoadRegistrar` port. The old null citizen
-file and unrelated `/store/auth/v1` call have been removed from this service.
+The owner approved native installation authentication instead of mTLS on
+2026-10-08. Do not distribute credentials, populated keystores or encrypted secret
+configuration with the JAR. `.env.example` documents public options only; the
+application does not load `.env` and does not use AWS credentials.
 
-`integrate()` retains the original public entry point. `resume(archive, status)` resumes
-delivery after restart without extracting again. After a delivery failure, repeated
-calls on the same service instance reuse `pendingArchive()`. A successful new call
-starts a new extraction; explicitly resume an existing archive to reconcile it.
+1. Provision the installation and its authorized scope through existing central
+   administration. An authorized PER-18 operator obtains a receiving run and an
+   approved compatible import cut through the existing e-SUS lifecycle.
+2. That operator calls `POST /adm/v1/esus-imports/installations/{id}/activations`
+   with professional authorization, operation/idempotency headers and scoped
+   context. Deliver the returned activation code through a protected channel.
+   It expires after ten minutes. The code is returned only once; an issuance
+   replay returns metadata, not the code. Issue a new code if the response is lost.
+3. In Swing, enter the HTTPS API origin, installation/run UUIDs, local keystore
+   path, a strong local password of at least twelve characters and activation
+   code. The client creates RSA-3072 locally and sends only public key plus a
+   signed proof to `/integration/v1/esus-installations/activate`.
+4. The client signs a timestamp and fresh nonce to obtain a fifteen-minute token
+   from `/integration/v1/esus-installations/tokens`. The token stays in memory.
+   Later starts need the local key password, not the activation code.
 
-`delivery.json` is atomically replaced after each confirmed transition:
-`created -> uploaded -> registered`. A per-directory file lock excludes simultaneous
-delivery of the same archive. The journal binds installation, run, file, checksum,
-storage and API destinations. Changing those on retry is rejected. A failed notification
-leaves `uploaded`; the next attempt uses the same idempotency key. Registration must
-return a durable opaque receipt. Registered does not mean processed or published.
+The API stores code/token hashes and public keys only. Keys expire in ninety days
+and are individually revocable. Session proofs have thirty seconds of clock skew
+tolerance: maintain synchronized workstation and server clocks. ADM credentials
+are never entered in the desktop integrator.
 
-The default `FileAvailabilityAPI` deliberately fails its preflight because the inspected
-API does not implement file registration. It does not make a fake HTTP call or report
-success. Consequently the default integrated run fails before generation/upload.
-The existing Swing local-only extraction remains available and unchanged. The completed
-remote workflow can be wired to that screen once the API adapter exists.
+## Upload and custody
 
-## Official AWS SDK
+After authorized-run preflight, extraction reads the database through the
+connection factory in read-only mode. Source version is queried from
+`public.tb_config_sistema` where `co_config_sistema = 'VERSAOBANCODADOS'`; it is not
+a manually configured version. SQL files remain in `src/main/resources/queries`.
 
-`pom.xml` declares `software.amazon.awssdk:s3:2.35.6` (AWS SDK for Java v2).
-`S3Service` uses `S3Client`, `PutObjectRequest`, `RequestBody.fromFile` and `HeadObject`.
-The implementation and tests compile/run with JDK 1.8.0_202.
+The archive uses `local-jsonl-1` / `esus-local-1`. The API requires a compatible
+approved cut; accepting the transport does not approve clinical mappings.
 
-Configuration:
+For `/integration/v1/esus-imports/{run}/files/{file}`:
 
-| Variable | Meaning |
-| --- | --- |
-| `AWS_REGION` | Authorized bucket region |
-| `AWS_BUCKET` | Private destination bucket |
-| `INTEGRATOR_S3_PREFIX` | Authorized root prefix, no leading/trailing slash |
-| AWS default credentials chain | Environment, profiles or workload credentials; temporary session credentials supported |
+1. `POST /upload-authorizations` binds checksum, size, versions and cutoff to the
+   installation/run/file. Writes carry stable operation and idempotency headers.
+2. The client validates the returned identity, key, HTTPS AWS S3 destination,
+   expiration and exact required headers, then streams the existing ZIP. Required
+   headers include SHA-256, size, ZIP content type, three identity metadata fields,
+   AES256 encryption and `If-None-Match: *`.
+3. `PUT /availability` confirms the candidate. A conditional PUT 412 may mean an
+   earlier upload succeeded; only API HEAD verification can accept that object.
+4. The API verifies all metadata and checksum, pins the S3 version, and commits
+   one stable receipt and one pending Scheduler intent atomically.
 
-Object key: `<prefix>/<installation_id>/<run_id>/<file_id>.zip`.
-IAM must restrict the configured installation prefix and deny public access.
-No ACL is set. Each write requests S3-managed AES-256 encryption and supplies the
-base64 SHA-256 checksum of the exact final ZIP bytes. Conditional `If-None-Match: *`
-prevents overwriting. A 412 response triggers reconciliation using HEAD; size,
-server checksum and ownership metadata must match. Missing/mismatched verification
-fails instead of notifying the API. No ETag-as-SHA assumption is made.
+`registered` means custody accepted, **not processed or published**. The UI reports
+this distinction. The client never calls batch manifest or clinical publication
+endpoints. HTTPS certificates use the JVM trust store; TLS validation is never
+disabled. Client S3 destinations are restricted to standard AWS virtual-hosted
+regional/global S3 HTTPS hosts; custom endpoints require an explicit future change.
 
-Uploads stream from disk and have bounded SDK call timeouts. This implementation uses
-single PUT and rejects files over 5 GiB; multipart upload is not implemented.
-The AWS SDK owns its internal retry policy. After an ambiguous failure, resume the
-same archive. Provider exception text, credentials and object bytes are not logged.
+## Recovery and retention
 
-AWS documentation: [conditional writes](https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutObject.html)
-and [Java v2 file upload](https://docs.aws.amazon.com/sdk-for-java/latest/developer-guide/migration-s3-client.html).
+Use **Retomar ZIP** to resume the same artifact after a restart without rereading
+the database. The private version-2 journal binds API origin, installation, run,
+file, hash, size and authorized object key. It contains no token, password,
+activation code, presigned URL or clinical payload. A local lock prevents concurrent
+delivery. Save updates are atomic.
 
-## API inspection (2026-10-08)
+Status lookup recovers lost confirmation responses. Expired upload authorizations
+are renewed with a new generation for the same bytes; confirmation identity stays
+stable. Retries are bounded, and other failures remain resumable rather than
+triggering extraction again. Never edit the artifact or journal to bypass a
+conflict. Legacy version-1 journals are rejected and require administrative review
+of custody before a deliberate new delivery.
 
-Evidence: sibling `health-now-api/src/interfaces/http/esus_import/{mod,delivery,operator,dto}.rs`.
+Exports, JSONL, reports and ZIPs contain sensitive healthcare information. They
+remain on disk after success/failure; no automatic retention policy was approved.
+Use full-disk encryption, restricted accounts and an approved secure cleanup
+procedure. Protect the keystore separately; losing its password requires a new
+activation and revocation of the previous key, not a recovery secret in the JAR.
 
-| Existing endpoint | Actual behavior | Applicability to S3 load |
-| --- | --- | --- |
-| `POST /adm/v1/esus-imports` | Operator starts an import with context, cut ID, entities and revision configuration; bearer session required | Existing batch-run lifecycle; local ZIP manifest is not this request |
-| `GET /integration/v1/esus-imports/capabilities?run_id=...` | Advertises batch protocol/schema v1 and batch/body limits for an authorized run | Does not advertise file registration or S3 upload |
-| `PUT /integration/v1/esus-imports/{run_id}/batches/{batch_id}` | Receives bounded JSON records with digest and idempotency headers | Not a ZIP upload or S3 notification |
-| `GET /integration/v1/esus-imports/{run_id}/batches/{batch_id}` | Reads a persisted batch receipt | Cannot reconcile an S3 object registration |
-| `PUT /integration/v1/esus-imports/{run_id}/manifest` | Verifies every referenced batch was received, then seals the run | Cannot register an arbitrary file or local manifest |
-| `GET /integration/v1/esus-imports/{run_id}` | Reads existing import summary | Future file states need backend support |
-| `GET /adm/v1/esus-imports/operations/{operation_id}` | Operator reads an operation outcome | Existing operator authorization and context are required |
+## Rotation, revocation and server responsibilities
 
-Technical routes require a trusted mTLS gateway's signed assertion, bound to method,
-request target, body and operation/idempotency headers. The integrator must not mint
-`X-Import-Gateway-Assertion` or treat a professional bearer token as installation identity.
-The old Java `/store/auth/v1` path was not found in this API's routes.
-Catalog S3 upload routes belong to a different domain and cannot be used for clinical loads.
+Create a new keystore at a different path using a new activation code. The API
+allows at most two active keys for overlap. Verify the new identity, then an
+authorized operator calls
+`POST /adm/v1/esus-imports/installations/{id}/keys/{fingerprint}/revoke`.
+Revocation invalidates further use of existing tokens for that key. Installation
+suspension and per-run scope checks are also enforced on every protected request.
 
-## Concrete API change proposed, not implemented
-
-Add an installation-authenticated file registration operation, for example:
-
-```text
-PUT /integration/v1/esus-imports/{run_id}/files/{file_id}
-Idempotency-Key: <installation_id>:<run_id>:<file_id>:<sha256>
-X-Operation-Id: <stable operation UUID>
-X-Body-SHA256: <digest of exact request bytes>
-```
-
-The path above is a proposal, not an existing endpoint. Proposed minimal JSON contract:
-
-```json
-{
-  "protocol_version": 1,
-  "installation_id": "installation UUID",
-  "run_id": "run UUID",
-  "file_id": "file UUID",
-  "scope_id": "authorized scope UUID",
-  "object_key": "authorized-prefix/installation/run/file.zip",
-  "size_bytes": 12345,
-  "sha256": "64 lowercase hexadecimal characters",
-  "extraction_cutoff": "2026-10-08",
-  "source_version": "PEC database version from VERSAOBANCODADOS",
-  "mapping_version": "esus-local-1",
-  "schema_version": "local-jsonl-1"
-}
-```
-
-Backend work must define file-run creation/authorization and bind the installation,
-scope, municipality and existing import lifecycle. The current manifest's text `scope`
-is not the API's authorized scope UUID. Transport must not silently equate these.
-Resolve bucket/prefix from trusted server configuration, not a supplied public URL or
-arbitrary bucket. Verify object size/hash/ownership, persist an idempotent registration
-and durable pending scheduler work in one transaction, and reject conflicting replay.
-Return a stable receipt correlated with installation/run/file/hash and an explicit
-registered/pending state. Equivalent retries must recover that receipt.
-
-Then implement `LoadRegistrar`'s HTTP adapter with gateway mTLS, bounded timeouts,
-strict correlated-receipt validation and safe error handling. The adapter's `destination()`
-must identify the fixed API target without secrets. Only after this should the Swing
-flow switch from local generation to remote integration.
+The API uses the official AWS SDK with server-side workload IAM. Its configured
+bucket must have all Block Public Access controls, versioning and bucket-owner
+enforced ownership. Startup validates these controls. Grant only the required
+bucket-control reads and object Put/Get/HEAD for the configured prefix; prohibit
+public access and insecure transport. Keep lifecycle rules from deleting pending
+versions. The client cannot choose a bucket, arbitrary prefix or object key.
+See the API documentation for migration, IAM and Scheduler boundaries.
 
 ## Verification
 
-`DeliveryTest` uses synthetic archives and fake API/storage ports. SDK request tests
-use official AWS request/response classes and a fake `S3Client`; no real AWS or API
-request is made. Tests cover successful ordered delivery, upload failure, lost API
-response, resume across service instances, already-registered replay, integrity failure,
-destination changes, missing API preflight, conditional/encrypted/checksummed upload,
-matching 412 replay and conflicting remote content.
+Use a Java 8 JDK: `mvn clean verify`. Tests use synthetic local HTTP and data, with
+no AWS service or real activation. Real database tests remain disabled unless
+explicitly enabled with their documented opt-in. Validate Swing on supported
+desktops and Windows file permissions before rollout. Use a maintained Java 8
+distribution and OS trust store for deployment; a successful build on an older
+JDK is not a security patch assessment.
 
-Run `mvn test` with Java 8 when Maven is available. In the current environment, all
-main sources were compiled with Java 8 `javac`; JUnitCore ran `DeliveryTest` and
-`ExtractionTest` (13 passing tests). Maven packaging, real bucket IAM/S3 behavior and
-real HTTP registration remain unverified. No source database extraction was rerun
-and no real clinical files were transmitted for these tests.
+Validation on 2026-10-08: Maven `clean verify` completed using JDK 1.8.0_202;
+19 tests passed and the two real e-SUS tests were skipped. The assembled 1.7 MiB
+JAR has Java 8 bytecode (major 52), no AWS SDK classes, no `.env`, no keystore and
+no obsolete authentication/delivery adapter classes. This verifies packaging and
+synthetic behavior, not production AWS, GUI layout or Windows ACL operation.
