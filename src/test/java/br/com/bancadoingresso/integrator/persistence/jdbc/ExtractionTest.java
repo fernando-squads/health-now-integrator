@@ -63,7 +63,7 @@ public class ExtractionTest {
 
     @Test public void invalidConfigurationIsRejected() {
         try {
-            new ExtractionOptions(Paths.get("exports"), "test", "test", LocalDate.now(), 0, 30);
+            new ExtractionOptions(Paths.get("exports"), "test", LocalDate.now(), 0, 30);
             fail("Zero page size must fail");
         } catch (IllegalArgumentException expected) { /* Expected. */ }
     }
@@ -84,7 +84,7 @@ public class ExtractionTest {
         Path output = temporary.getRoot().toPath();
         try {
             new ExtractionService().extract(connection,
-                new ExtractionOptions(output, "synthetic", "test", LocalDate.now(), 2, 30), message -> {});
+                new ExtractionOptions(output, "synthetic", LocalDate.now(), 2, 30), message -> {});
             fail("Query failure must abort the run");
         } catch (SQLException expected) {
             assertFalse(expected.toString().contains("secret-source-value"));

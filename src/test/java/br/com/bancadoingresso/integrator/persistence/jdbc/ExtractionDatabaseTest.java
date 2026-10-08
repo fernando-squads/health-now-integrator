@@ -73,7 +73,9 @@ public class ExtractionDatabaseTest {
     @Test public void fullExtractionReconcilesAndProducesVerifiedArchive() throws Exception {
         ExtractionOptions options = ExtractionOptions.fromSystemProperties();
         Path archive;
+        String expectedVersion;
         try (Connection connection = ConnectionFactory.openExtractionConnection()) {
+            expectedVersion = new SourceVersionJDBC(connection, options.timeoutSeconds).getVersion();
             archive = new ExtractionService().extract(connection, options, message -> {});
         }
         Path directory = archive.getParent();
@@ -82,6 +84,7 @@ public class ExtractionDatabaseTest {
         assertEquals(receipt.get("sha256").getAsString(), writer.metadata(archive).get("sha256"));
         assertEquals(receipt.get("size_bytes").getAsLong(), Files.size(archive));
         JsonObject manifest = json(directory.resolve("manifest.json"));
+        assertEquals(expectedVersion, manifest.get("source_version").getAsString());
         JsonObject counts = json(directory.resolve("reconciliation.json"));
         try (ZipFile zip = new ZipFile(archive.toFile())) {
             assertEquals(36, zip.size());

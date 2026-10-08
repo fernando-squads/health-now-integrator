@@ -32,3 +32,8 @@ somente leitura e gera arquivos JSONL, manifesto, relatório de reconciliação 
 em `exports/<run_id>/`. O andamento aparece na tela. Não há envio ao S3 nesta etapa.
 
 Configuração, consultas, relacionamentos e testes: [Database extraction](docs/DATABASE_EXTRACTION.md).
+
+O `IntegratorService` também possui orquestração de entrega, SDK oficial AWS S3 e
+retomada por arquivo. A notificação depende de um endpoint ainda ausente no
+`health-now-api`; o fluxo integrado bloqueia antes do upload enquanto esse contrato
+não existir. Veja [Load delivery](docs/LOAD_DELIVERY.md) para configuração e análise das rotas.

@@ -176,13 +176,16 @@ transport contract. Do not treat successful local generation as server publicati
 System properties:
 - `integrator.output`: output directory (default `exports`).
 - `integrator.installation`: installation ID (default `local-esus`, local testing only).
-- `integrator.sourceVersion`: actual PEC version (default `unverified-local-schema`).
 - `integrator.cutoff`: inclusive date, default today in the local timezone.
 - `integrator.pageSize`: 1–10000, default 1000.
 - `integrator.timeoutSeconds`: per-query timeout, default 30.
 
-Use verified installation/source values for deployment; the adapter does not infer a PEC
-version from a PostgreSQL version. Physical compatibility is checked by query execution.
+Use a verified installation ID for deployment. `source_version` is read automatically
+through `configuration/find-source-version.sql` from `tb_config_sistema.ds_texto`,
+where `co_config_sistema = 'VERSAOBANCODADOS'`, within the extraction snapshot.
+It denotes the PEC database version, not the PostgreSQL server or application binary.
+Missing, blank or duplicate version records abort extraction; no manual override is used.
+Physical compatibility is checked by query execution.
 The local schema was inspected on 2026-10-08; institutional/domain homologation is separate.
 
 ```sh

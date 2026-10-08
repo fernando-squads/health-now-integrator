@@ -33,6 +33,8 @@ public final class ExtractionService {
         Map<String, Object> report = new LinkedHashMap<String, Object>();
         String started = Instant.now().toString();
         try {
+            status.accept("Consultando versão do banco PEC");
+            String sourceVersion = new SourceVersionJDBC(connection, options.timeoutSeconds).getVersion();
             for (ExtractionRepository repository : repositories(connection, options.timeoutSeconds)) {
                 for (ExtractionQuery query : repository.queries()) {
                     status.accept("Consultando " + query.entity);
@@ -83,7 +85,7 @@ public final class ExtractionService {
             manifest.put("extraction_cutoff", options.cutoff.toString());
             manifest.put("cutoff_semantics", "inclusive-clinical-date; current snapshot for undated entities");
             manifest.put("snapshot_started_at", started);
-            manifest.put("source_version", options.sourceVersion);
+            manifest.put("source_version", sourceVersion);
             manifest.put("mapping_version", "esus-local-1");
             manifest.put("schema_version", "local-jsonl-1");
             manifest.put("generated_at", Instant.now().toString());
