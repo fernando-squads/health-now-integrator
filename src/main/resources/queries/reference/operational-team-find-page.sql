@@ -4,6 +4,8 @@ WITH parameters AS (SELECT CAST(? AS date) AS cutoff), records AS (
            s.no_equipe,
            s.co_unidade_saude,
            s.st_ativo,
+           s.co_unico_equipe,
+           s.ds_area,
            (FALSE) AS _invalid,
            (FALSE) AS _unmatched,
            TRUE AS _eligible
@@ -12,7 +14,7 @@ WITH parameters AS (SELECT CAST(? AS date) AS cutoff), records AS (
 
     WHERE TRUE
 )
-SELECT source_id, nu_ine, no_equipe, co_unidade_saude, st_ativo, _invalid, _unmatched
+SELECT source_id, nu_ine, no_equipe, co_unidade_saude, st_ativo, co_unico_equipe, ds_area, _invalid, _unmatched
 FROM records
 WHERE _eligible AND source_id > ?
 ORDER BY source_id

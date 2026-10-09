@@ -30,7 +30,7 @@ public final class HttpTransport {
             return uri.resolve("/");
         } catch (Exception e) { throw new IOException("A URL HTTP ou HTTPS configurada para a API é inválida. Use uma origem sem caminho, credenciais ou parâmetros."); }
     }
-    private void validate(URI uri, boolean upload) throws IOException {
+    void validate(URI uri, boolean upload) throws IOException {
         boolean loopback = localTests && "http".equals(uri.getScheme()) && "127.0.0.1".equals(uri.getHost());
         boolean apiOrigin = !upload && ("http".equals(uri.getScheme()) || "https".equals(uri.getScheme()));
         boolean secureUpload = upload && "https".equals(uri.getScheme());

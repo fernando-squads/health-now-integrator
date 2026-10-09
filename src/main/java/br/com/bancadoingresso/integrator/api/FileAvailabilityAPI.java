@@ -15,8 +15,7 @@ public final class FileAvailabilityAPI implements FileDeliveryAPI {
         body.addProperty("sha256", artifact.sha256); body.addProperty("size_bytes", artifact.size);
         preflight(artifact.installationId, artifact.runId);
         JsonObject response = request("POST", path() + "/upload-authorizations", body, operation, key);
-        client.verifyUpload(response);
-        return new UploadAuthorization(response, artifact);
+        return client.uploadAuthorization(response, artifact);
     }
     public FileStatus confirm(LoadArtifact artifact, String objectKey, String operation, String key) throws IOException {
         JsonObject body = new JsonObject(); body.addProperty("file_id", artifact.fileId);

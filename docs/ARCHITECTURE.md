@@ -27,6 +27,11 @@ configuration decryptable by the JAR itself.
 | `S3Service` | Java standard HTTP streaming to an API-authorized presigned URL; no AWS SDK or AWS credential chain. |
 | `DeliveryJournal` | Atomic private recovery metadata bound to origin, installation, run, file, bytes and object key. |
 
+Source identity is obtained from PEC `UUID_APLICACAO`, not from API request IDs.
+Schema v2 also declares municipalities from operational unit/locality foreign keys;
+there is no manual municipality registration or selection in the ADM workflow.
+Professional assignments are source evidence, never accounts or platform grants.
+
 The API alone resolves bucket/key, checks bootstrap-import authority,
 presigns PUT, verifies S3 HEAD and atomically writes receipt plus pending Scheduler
 intent. AWS credentials and signing authority never cross into the desktop.
@@ -62,5 +67,5 @@ local synthetic HTTP, protected token custody, request validation and delivery
 recovery. Real e-SUS tests are explicit opt-in; delivery tests use no AWS or patient
 data. Visual Swing behavior and Windows ACL behavior require platform validation.
 The API migrations, private versioned S3 bucket, workload IAM, HTTPS deployment,
-authorized run/cut provisioning and Scheduler worker rollout remain operational
+Scheduler protection keys and worker rollout remain operational
 responsibilities. See the API's `docs/ESUS_FILE_DELIVERY.md`.

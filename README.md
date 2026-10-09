@@ -17,7 +17,9 @@ starts use the local owner-only token file and do not require the code.
 The same file contains the non-secret extraction settings, including output
 directory, cutoff date, page size and timeout.
 The API resolves installation and run IDs: the user never enters UUIDs or generates
-keys. The JAR contains only the API public verification keyring, no shared secrets,
+keys. The source's persistent identity and municipalities are read automatically
+from the PEC snapshot and exported in the schema-v2 manifest. The JAR contains
+only the API public verification keyring, no shared secrets,
 private keys, AWS credentials or .env configuration.
 
 The integrator generates immutable JSONL, manifest, reconciliation report and ZIP

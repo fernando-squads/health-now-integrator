@@ -13,10 +13,14 @@ public final class UploadAuthorization {
     public final Instant expiresAt;
     public final Map<String, String> headers;
     public UploadAuthorization(JsonObject response, LoadArtifact artifact) throws IOException {
+        this(response, artifact, new HttpTransport());
+    }
+    UploadAuthorization(JsonObject response, LoadArtifact artifact, HttpTransport transport) throws IOException {
         try {
             if (!artifact.fileId.equals(response.get("file_id").getAsString()) || !artifact.runId.equals(response.get("import_id").getAsString())) throw new IOException();
             url = new URI(response.get("upload_url").getAsString());
-            if (url.getRawQuery() == null || !"https".equalsIgnoreCase(url.getScheme())) throw new IOException();
+            if (url.getRawQuery() == null) throw new IOException();
+            transport.validate(url, true);
             expiresAt = java.time.OffsetDateTime.parse(response.get("expires_at").getAsString()).toInstant();
             if (!expiresAt.isAfter(Instant.now()) || expiresAt.isAfter(Instant.now().plusSeconds(330))) throw new IOException();
             Map<String, String> values = new TreeMap<String, String>(String.CASE_INSENSITIVE_ORDER);

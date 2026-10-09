@@ -39,7 +39,14 @@ public final class InstallationClient {
     }
     public CurrentRun current() throws IOException {
         JsonObject response=request("GET","/integration/v1/esus-imports/bootstrap/current",null,null,null);
+        if (!ApiSignatureVerifier.uuid(credential, "import_id").equals(ApiSignatureVerifier.uuid(response, "import_id"))) {
+            throw new ActivationRequired();
+        }
         return new CurrentRun(response);
+    }
+    UploadAuthorization uploadAuthorization(JsonObject response, br.com.bancadoingresso.integrator.service.LoadArtifact artifact) throws IOException {
+        verifyUpload(response);
+        return new UploadAuthorization(response, artifact, http);
     }
     public void verifyUpload(JsonObject response) throws IOException {
         verifier.verify(response,"health-now-bootstrap-upload-v1","import_id","file_id","upload_url","expires_at");

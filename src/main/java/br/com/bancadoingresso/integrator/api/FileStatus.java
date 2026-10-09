@@ -9,6 +9,7 @@ public final class FileStatus {
     public final Instant expires;
     public FileStatus(JsonObject response, LoadArtifact artifact) throws IOException {
         try {
+            if (!artifact.runId.equals(ApiSignatureVerifier.uuid(response, "import_id"))) throw new IOException();
             state = response.get("state").getAsString();
             if (!Arrays.asList("ready_for_processing", "file_received").contains(state)) throw new IOException();
             receipt = null;

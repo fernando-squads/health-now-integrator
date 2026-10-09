@@ -35,6 +35,7 @@ public final class ExtractionService {
         try {
             status.accept("Consultando versão do banco PEC");
             String sourceVersion = new SourceVersionJDBC(connection, options.timeoutSeconds).getVersion();
+            Map<String, Object> sourceIdentity = new SourceIdentityJDBC(connection, options.timeoutSeconds).read();
             for (ExtractionRepository repository : repositories(connection, options.timeoutSeconds)) {
                 for (ExtractionQuery query : repository.queries()) {
                     status.accept("Consultando " + query.entity);
@@ -86,8 +87,9 @@ public final class ExtractionService {
             manifest.put("cutoff_semantics", "inclusive-clinical-date; current snapshot for undated entities");
             manifest.put("snapshot_started_at", started);
             manifest.put("source_version", sourceVersion);
-            manifest.put("mapping_version", "esus-local-1");
-            manifest.put("schema_version", "local-jsonl-1");
+            manifest.put("mapping_version", "esus-local-2");
+            manifest.put("schema_version", "local-jsonl-2");
+            manifest.put("source_identity", sourceIdentity);
             manifest.put("generated_at", Instant.now().toString());
             manifest.put("files", entities);
             manifest.put("reconciliation", writer.metadata(reconciliation));

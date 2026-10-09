@@ -12,7 +12,7 @@ public class InstallationFormTest {
     @Rule public TemporaryFolder temporary = new TemporaryFolder();
     @Test public void firstUseHasOnlyTheActivationCodeAndRequiresIt() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            InstallationForm form=new InstallationForm();
+            InstallationForm form=new InstallationForm("https://" + java.util.UUID.randomUUID() + ".invalid");
             assertTrue(form.code.isVisible());assertFalse(form.ready());
             form.code.setText("synthetic-code");assertTrue(form.ready());
         });

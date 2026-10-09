@@ -20,6 +20,7 @@ authorize delivery, upload to S3 and confirm API custody; see `LOAD_DELIVERY.md`
 - `AttendanceJDBC`, `AttendanceProblemJDBC`, `AttendanceExamJDBC`,
   `AttendanceProcedureJDBC`, `AttendanceReferralJDBC`: independent clinical collections.
 - `ReferenceJDBC`: clinical dimensions and operational professional/team/unit identifiers.
+- `SourceIdentityJDBC`: persistent PEC identity and explicit municipalities of operational units, read in the same snapshot.
 - `ExtractionRepository`: bound parameters, bounded pages, safe errors and resource cleanup.
 - `ExtractionRecord`: ordered projection DTO; its fields come exclusively from explicit SQL columns.
   Null values and numeric precision are preserved. Dates use ISO strings and timestamp-with-time-zone
@@ -70,13 +71,15 @@ The existing `cidadao/find-all.sql` remains for the legacy API.
 | `priority.jsonl` | `tb_dim_prioridade_cuidado` | `reference/priority-find-page.sql` |
 | `citizen-history.jsonl` | `tb_fat_cidadao` | `citizen-history/find-page.sql` |
 | `household.jsonl` | `tb_fat_cad_domiciliar` | `household/find-page.sql` |
+| `professional-assignment.jsonl` | `tb_lotacao` | `reference/professional-assignment-find-page.sql` |
 
 `verification/transaction-state.sql` verifies server-side transaction settings in integration tests.
 
 The additional citizen-history and household projections resolve the physical keys used by
 family-history. They do not export household addresses or protected identity values.
 `tb_prof`, `tb_lotacao`, `tb_cbo`, `tb_equipe` and `tb_unidade_saude` also participate
-in the ACS lookup; lotations and CBO operational rows are not separate export entities.
+in the ACS lookup. Schema v2 exports lotations separately, including professional,
+unit, team, CBO and deactivation evidence; it does not export authentication rows.
 
 ## Relationships
 
@@ -149,7 +152,7 @@ foreign-key audit of every exported dimension or a downstream identity adjudicat
 Default output:
 ```text
 exports/<run_id>/
-  <entity>.jsonl (34 files)
+  <entity>.jsonl (35 files)
   reconciliation.json
   manifest.json
   <file_id>.zip
@@ -169,9 +172,17 @@ files are owner-readable/writable and the completed ZIP is owner-readable only.
 Consumers must verify checksums; filesystem permissions alone are not tamper-proof storage.
 
 Output is ignored by Git. Keep customized output directories outside source control.
-The `local-jsonl-1` / `esus-local-1` format is accepted by the file transport only
-with a compatible approved run/cut. Transport acceptance is not clinical mapping
-homologation. Do not treat local generation or API custody as server publication.
+Current exports use `local-jsonl-2` / `esus-local-2`. The manifest includes
+`source_identity.installation_uuid` from `tb_config_sistema.UUID_APLICACAO` and
+`source_identity.municipalities` from the units' explicit locality foreign keys.
+The source identity is independent of the request-bound legacy `installation_id`
+and `run_id` fields. The municipal reference catalog is not an ownership declaration.
+Operational unit rows also carry `municipality_ibge`; teams carry `co_unico_equipe`
+and `ds_area`; operational professionals carry format-validated CPF/CNS.
+No municipal, scope or version fields are entered by the N1 operator.
+Legacy v1 archives remain immutable custody evidence but lack the metadata required
+for Scheduler materialization: create a new import and re-export with this version.
+Transport acceptance is not clinical mapping homologation or publication.
 
 ## Configuration and validation
 
@@ -206,7 +217,11 @@ record counts, identifier formats, hashes and ZIP membership.
 Unit tests cover missing resources, allowlisted projections, UTF-8/null output,
 overwrite prevention, invalid configuration and safe failure without a completed artifact.
 
-Maven verification uses JDK 1.8.0_202 and a locally installed Maven executable.
+The materialization extension was verified using JDK 17 targeting Java 8 and local Maven.
+`mvn -o verify` passed. `mvn -o -Dtest=SourceMetadataDatabaseTest -Desus.schema=true test`
+also passed against the local PEC in server-enforced read-only mode: it reads source
+metadata and prepares all 35 projection queries with LIMIT 0, without exporting patients.
+The complete real-data extraction test remains a separate explicit opt-in.
 Synthetic extraction and delivery tests run without external AWS or patient data.
 Real e-SUS tests were not rerun for secure delivery. Visual Swing behavior and
 Windows ACL enforcement still require platform validation before rollout.

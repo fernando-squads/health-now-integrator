@@ -29,7 +29,7 @@ public class ExtractionTest {
                 assertTrue(SqlQueryLoader.load(query.resource.replace("find-page", "count")).contains("skipped_count"));
             }
         }
-        assertEquals(34, entities.size());
+        assertEquals(35, entities.size());
         assertTrue(SqlQueryLoader.load("/queries/citizen/find-by-id.sql").contains("source_id = ?"));
     }
 

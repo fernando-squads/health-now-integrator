@@ -10,6 +10,7 @@ public final class ReferenceJDBC extends ExtractionRepository {
     @Override
     public List<ExtractionQuery> queries() {
         return Arrays.asList(
+            new ExtractionQuery("professional-assignment", "reference/professional-assignment-find-page.sql", "tb_lotacao"),
             new ExtractionQuery("priority", "reference/priority-find-page.sql", "tb_dim_prioridade_cuidado"),
             new ExtractionQuery("professional", "reference/professional-find-page.sql", "tb_dim_profissional"),
             new ExtractionQuery("team", "reference/team-find-page.sql", "tb_dim_equipe"),
