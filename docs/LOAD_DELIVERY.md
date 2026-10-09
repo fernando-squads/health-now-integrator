@@ -42,8 +42,8 @@ do not protect against a compromised OS user; use managed encrypted storage.
 
 ## Extraction, upload and custody
 
-Extraction is read-only and repeatable-read. Schema `local-jsonl-2` /
-mapping `esus-local-2` contain 35 entity files and explicit persistent PEC source
+Extraction is read-only and repeatable-read. Schema `local-jsonl-1` /
+mapping `esus-local-1` contain 35 entity files and explicit persistent PEC source
 identity/municipal unit associations; see [Database extraction](DATABASE_EXTRACTION.md).
 Versions are obtained/exported by the integrator, not configured by the ADM operator.
 The compatibility boundary is the archive schema, not a manually approved PEC version.

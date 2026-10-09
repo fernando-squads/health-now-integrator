@@ -172,7 +172,7 @@ files are owner-readable/writable and the completed ZIP is owner-readable only.
 Consumers must verify checksums; filesystem permissions alone are not tamper-proof storage.
 
 Output is ignored by Git. Keep customized output directories outside source control.
-Current exports use `local-jsonl-2` / `esus-local-2`. The manifest includes
+Current exports use `local-jsonl-1` / `esus-local-1`. The manifest includes
 `source_identity.installation_uuid` from `tb_config_sistema.UUID_APLICACAO` and
 `source_identity.municipalities` from the units' explicit locality foreign keys.
 The source identity is independent of the request-bound legacy `installation_id`
@@ -180,8 +180,8 @@ and `run_id` fields. The municipal reference catalog is not an ownership declara
 Operational unit rows also carry `municipality_ibge`; teams carry `co_unico_equipe`
 and `ds_area`; operational professionals carry format-validated CPF/CNS.
 No municipal, scope or version fields are entered by the N1 operator.
-Legacy v1 archives remain immutable custody evidence but lack the metadata required
-for Scheduler materialization: create a new import and re-export with this version.
+The pre-production contract is consolidated as v1 with these mandatory fields.
+Earlier incomplete development archives must be regenerated for materialization.
 Transport acceptance is not clinical mapping homologation or publication.
 
 ## Configuration and validation
