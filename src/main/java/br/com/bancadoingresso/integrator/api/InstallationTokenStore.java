@@ -9,9 +9,8 @@ import java.nio.channels.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.time.*;
-import java.util.Arrays;
 
-/** Only the token and its origin-bound metadata are persisted, under password-derived AES-GCM. */
+/** Only the token and its origin-bound metadata are persisted in an owner-only file. */
 public final class InstallationTokenStore {
     private final Path path;
     private final URI api;
@@ -30,16 +29,15 @@ public final class InstallationTokenStore {
             if (!expiry.isAfter(Instant.now()) || expiry.isAfter(Instant.now().plusSeconds(366L*86400))) throw new ActivationRequired();
         } catch (RuntimeException e) { throw new ActivationRequired(); }
     }
-    public JsonObject load(char[] password) throws IOException { return access(password, null); }
-    public void save(JsonObject response, char[] password) throws IOException {
+    public JsonObject load() throws IOException { return access(null); }
+    public void save(JsonObject response) throws IOException {
         JsonObject data = new JsonObject(); data.addProperty("protocol_version",1); data.addProperty("api",api.toString());
         for (String field : new String[]{"installation_token_id","installation_token","expires_at"}) data.addProperty(field,ApiSignatureVerifier.text(response,field));
-        validate(data,api); access(password,data);
+        validate(data,api); access(data);
     }
-    private synchronized JsonObject access(char[] password, JsonObject data) throws IOException {
+    private synchronized JsonObject access(JsonObject data) throws IOException {
         byte[] plain = null;
         try {
-            if (password == null || password.length < 12) throw new IOException();
             Files.createDirectories(path.getParent()); ProtectedFiles.restrict(path.getParent());
             Path lockPath=path.resolveSibling(path.getFileName()+".lock");
             try (FileChannel lockFile=FileChannel.open(lockPath,StandardOpenOption.CREATE,StandardOpenOption.WRITE,LinkOption.NOFOLLOW_LINKS);
@@ -48,25 +46,25 @@ public final class InstallationTokenStore {
                 if (data==null) {
                     if (!exists() || Files.size(path)>8192) throw new ActivationRequired();
                     ProtectedFiles.restrict(path);
-                    plain=KeyEnvelope.open(Files.readAllBytes(path),password,api.toString());
+                    plain=Files.readAllBytes(path);
                     JsonObject result=JsonParser.parseString(new String(plain,StandardCharsets.UTF_8)).getAsJsonObject();
                     validate(result,api); return result;
                 }
                 if (Files.isSymbolicLink(path)) throw new IOException();
                 plain=data.toString().getBytes(StandardCharsets.UTF_8);
-                byte[] encrypted=KeyEnvelope.protect(plain,password,api.toString());
                 Path temporary=Files.createTempFile(path.getParent(),".token-",".pending");
                 try {
                     ProtectedFiles.restrict(temporary);
                     try(FileChannel channel=FileChannel.open(temporary,StandardOpenOption.WRITE)) {
-                        ByteBuffer buffer=ByteBuffer.wrap(encrypted);while(buffer.hasRemaining())channel.write(buffer);channel.force(true);
+                        ByteBuffer buffer=ByteBuffer.wrap(plain);while(buffer.hasRemaining())channel.write(buffer);channel.force(true);
                     }
                     Files.move(temporary,path,StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING);
-                } finally {Files.deleteIfExists(temporary);Arrays.fill(encrypted,(byte)0);}
+                    ProtectedFiles.restrict(path);
+                } finally {Files.deleteIfExists(temporary);}
                 return data;
             }
         } catch (ActivationRequired e) { throw e;
-        } catch (Exception e) { throw new IOException("Não foi possível abrir ou salvar o token local. Verifique a senha e as permissões; se perdeu a senha, solicite nova ativação.");
-        } finally { if(plain!=null)Arrays.fill(plain,(byte)0); }
+        } catch (Exception e) { throw new IOException("Não foi possível abrir ou salvar o token local. Verifique as permissões; se o token foi perdido, solicite nova ativação.");
+        } finally { if(plain!=null)java.util.Arrays.fill(plain,(byte)0); }
     }
 }

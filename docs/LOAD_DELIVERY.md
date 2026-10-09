@@ -11,18 +11,18 @@ There is no .env loader and no AWS SDK/credential chain in the desktop.
    POST /adm/v1/esus-imports/installations/{installation_id}/activation-codes
    with run_id, scoped context, X-Operation-Id and Idempotency-Key.
    The ten-minute code is returned once; issuance replay never reveals it again.
-2. Enter database host, port, name, username and password; HTTPS API origin;
-   activation code; and a local protection password (at least 12 characters).
-   No installation/run UUID or key path is entered. No client key is generated.
+2. Configure the HTTP or HTTPS API origin in `src/main/resources/application.properties`,
+   then enter database host, port, name, username and password plus the activation
+   code. No installation/run UUID, key path or local password is entered. No client
+   key is generated.
 3. POST /integration/v1/esus-installations/credential-activations sends only
    activation_code. The signed opaque token is verified before being saved.
    The API stores its SHA-256 hash and revocable metadata, never the plaintext.
 4. GET /integration/v1/esus-imports/current uses that token directly and returns
    the signed installation and Receiving run internally. No run is created.
-5. Later starts ask for the local password, not the code, when a token file exists.
-   Invalid/expired/revoked tokens prompt reactivation. Use the new-code checkbox
-   for deliberate rotation or a lost password. A wrong local password does not
-   delete or overwrite the existing credential.
+5. Later starts use the locally stored token and do not ask for a code.
+   Invalid, expired or revoked tokens make the activation-code field available again.
+   Token rotation is performed by issuing a new code through the ADM API.
 
 Tokens expire after 365 days. Activation consumes the code exactly once and
 revokes the previous token atomically. If activation succeeds but its response
@@ -53,11 +53,12 @@ The exact ordered fields, including the first domain-separator line, are:
 The additional signed installation_id preserves the existing manifest contract
 without asking the user for an identifier. CR/LF inside fields is rejected.
 A public key authenticates the response, not the JAR. A modified client can still
-use a valid stolen token; revoke tokens explicitly after compromise. Password
-protection is not a defense against malware inspecting a running process.
-Enter only the centrally approved HTTPS API origin: response signatures do not
-prevent an activation code from being sent to a wrongly entered server. Trusted
-distribution of the API URL and TLS validation remain essential.
+use a valid stolen token; revoke tokens explicitly after compromise. Owner-only
+file permissions are not a defense against malware or another process running as
+the same user. Use an encrypted managed disk for protection at rest. The API URL
+is centrally packaged in `application.properties`; trusted JAR distribution remains
+essential. HTTP does not protect activation codes or tokens in transit, so use HTTPS
+for production deployments.
 
 ## Upload and custody
 
@@ -107,7 +108,7 @@ Exports, JSONL, reports and ZIPs contain sensitive healthcare information. They
 remain on disk after success/failure; no automatic retention policy was approved.
 Use full-disk encryption, restricted accounts and an approved secure cleanup
 procedure. The token file contains only origin, protocol, token ID, token and expiry,
-protected with password-derived AES-GCM. It contains no database credentials.
+protected with owner-only filesystem permissions. It contains no database credentials.
 
 ## Rotation, revocation and server responsibilities
 
@@ -115,7 +116,7 @@ ADM revokes a token using
 POST /adm/v1/esus-imports/installations/{installation_id}/tokens/{installation_token_id}/revoke.
 It takes scoped context and operation/idempotency headers. Revocation is immediate
 for API calls; an already-issued S3 capability expires independently within minutes.
-A new code rotates the token. The local encrypted file is retained on signature or
+A new code rotates the token. The local owner-only token file is retained on signature or
 authentication failure for safe troubleshooting, not silently deleted.
 
 API signing configuration is ESUS_INSTALLATION_SIGNING_PRIVATE_KEY (base64 PKCS#8)
@@ -145,7 +146,7 @@ JDK is not a security patch assessment.
 
 Validation on 2026-10-08: Java 8 Maven verify passed 25 tests; the two real e-SUS
 tests remained disabled. Coverage includes code-only activation, signature and
-key-ID tampering, encrypted origin-bound token storage, expiry/revocation,
+key-ID tampering, owner-only origin-bound token storage, expiry/revocation,
 conditional Swing fields, upload renewal and receipt recovery. The macOS JDK
 emitted its missing-Times-font fallback warning during headless Swing tests;
 visual layout and Windows ACL behavior still need platform validation.

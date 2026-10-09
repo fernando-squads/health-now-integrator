@@ -28,7 +28,6 @@ public class SecureDeliveryTest {
     private JsonObject activationResponse;
     private boolean used, revoked, tamperCurrent, tamperUpload, tamperActivation;
     private final String tokenId=UUID.randomUUID().toString();
-    private final char[] password="synthetic-token-password".toCharArray();
     private InstallationClient sessions;
     private boolean authorized, registered, rejectFirstUpload, loseConfirmation, wrongChecksum;
     private int generated, authorizations, uploads, confirms;
@@ -46,7 +45,7 @@ public class SecureDeliveryTest {
             catch (Exception e) { reply(exchange, 500, new JsonObject()); }
             finally {exchange.close();}
         }); server.start();
-        char[] code=new char[43];Arrays.fill(code,'a');sessions.open(code,password);for(char c:code)assertEquals('\0',c);
+        char[] code=new char[43];Arrays.fill(code,'a');sessions.open(code);for(char c:code)assertEquals('\0',c);
     }
     @After public void stop() { if (server != null) server.stop(0); }
     private byte[] read(InputStream input) throws IOException {
@@ -98,7 +97,11 @@ public class SecureDeliveryTest {
         }
         if (path.endsWith("/availability")) {
             confirms++;registered=true;
-            if(loseConfirmation && confirms==1) {reply(exchange,500,new JsonObject());return;}
+            if(loseConfirmation && confirms==1) {
+                JsonObject error=new JsonObject();error.addProperty("message","File registration is temporarily unavailable");
+                error.add("details",new Gson().toJsonTree(Collections.singletonList("Retry the same file later")));
+                reply(exchange,500,error);return;
+            }
             reply(exchange,201,DeliveryTest.status(artifact,receipt));return;
         }
         reply(exchange,authorized?200:404,DeliveryTest.status(artifact,registered?receipt:null));
@@ -112,7 +115,7 @@ public class SecureDeliveryTest {
     }
     private ExtractionOptions options() {return new ExtractionOptions(temporary.getRoot().toPath(),artifact.installationId,LocalDate.now(),10,30,artifact.runId);}
     @Test public void nativeActivationAndSignedHttpUploadUseRequiredHeaders() throws Exception {
-        sessions.open(new char[0],password);assertEquals(artifact.runId,sessions.current().run);
+        sessions.open(new char[0]);assertEquals(artifact.runId,sessions.current().run);
         service().integrate(options(),s->{});assertEquals(1,uploads);assertEquals(1,confirms);
     }
     @Test public void expiredCapabilityReauthorizesWithoutGeneratingAnotherArchive() throws Exception {
@@ -120,7 +123,9 @@ public class SecureDeliveryTest {
         assertEquals(1,generated);assertEquals(2,authorizations);assertEquals(1,confirms);
     }
     @Test public void lostAvailabilityResponseRecoversOnRestart() throws Exception {
-        loseConfirmation=true;try{service().integrate(options(),s->{});fail();}catch(IOException expected){}
+        loseConfirmation=true;try{service().integrate(options(),s->{});fail();}catch(IOException expected){
+            assertEquals("A operação HTTP não foi confirmada (status 500): File registration is temporarily unavailable: Retry the same file later",expected.getMessage());
+        }
         service().resume(artifact.path,s->{});assertEquals(1,generated);assertEquals(1,uploads);assertEquals(1,confirms);
     }
     @Test public void invalidAuthorizationCannotSendArchive() throws Exception {
@@ -145,15 +150,13 @@ public class SecureDeliveryTest {
         valid.addProperty("expires_at", Instant.now().plusSeconds(300).toString().replace("Z", "+00:00"));
         assertTrue(new FileStatus(valid, artifact).registered());
     }
-    @Test public void tokenStoreIsEncryptedOriginBoundAndRequiresPassword() throws Exception {
-        assertEquals(token,store.load(password).get("installation_token").getAsString());
-        try{store.load("wrong-password-with-length".toCharArray());fail();}catch(IOException expected){}
+    @Test public void tokenStoreIsOwnerOnlyAndOriginBound() throws Exception {
+        assertEquals(token,store.load().get("installation_token").getAsString());
         Path path=temporary.getRoot().toPath().resolve("credential.token");
-        try{new InstallationTokenStore(path,URI.create("https://foreign.invalid/")).load(password);fail();}catch(IOException expected){}
-        String stored=new String(Files.readAllBytes(path),StandardCharsets.ISO_8859_1);assertFalse(stored.contains(token));assertFalse(stored.contains(new String(password)));
+        try{new InstallationTokenStore(path,URI.create("https://foreign.invalid/")).load();fail();}catch(IOException expected){}
         service().integrate(options(),s->{});
         String journal=new String(Files.readAllBytes(artifact.path.resolveSibling("delivery.json")),StandardCharsets.UTF_8);
-        assertFalse(journal.contains(token));assertFalse(journal.contains(new String(password)));assertFalse(journal.contains("upload_url"));assertFalse(journal.contains("activation_code"));
+        assertFalse(journal.contains(token));assertFalse(journal.contains("upload_url"));assertFalse(journal.contains("activation_code"));
     }
     @Test public void tamperedFieldsUnknownKeysAndExpiredTokenFailClosed() throws Exception {
         for(String field:Arrays.asList("installation_token_id","installation_token","expires_at","signing_key_id","signature")) {
@@ -163,14 +166,14 @@ public class SecureDeliveryTest {
         JsonObject changed=activationResponse.deepCopy();changed.addProperty("protocol_version",1.5);
         try{verifier.verify(changed,"health-now-installation-token-v1","installation_token_id","installation_token","expires_at");fail();}catch(ActivationRequired expected){}
         changed=activationResponse.deepCopy();changed.addProperty("expires_at",Instant.now().minusSeconds(1).toString());
-        try{store.save(changed,password);fail();}catch(ActivationRequired expected){}
-        assertEquals(token,store.load(password).get("installation_token").getAsString());
+        try{store.save(changed);fail();}catch(ActivationRequired expected){}
+        assertEquals(token,store.load().get("installation_token").getAsString());
         tamperCurrent=true;try{sessions.current();fail();}catch(ActivationRequired expected){}
         assertEquals(0,generated);
     }
     @Test public void revokedTokenAndTamperedUploadRequireActivationWithoutSendingBytes() throws Exception {
         revoked=true;try{sessions.current();fail();}catch(ActivationRequired expected){}
-        revoked=false;sessions.open(new char[0],password);tamperUpload=true;
+        revoked=false;sessions.open(new char[0]);tamperUpload=true;
         try{service().integrate(options(),s->{});fail();}catch(ActivationRequired expected){}
         assertEquals(0,uploads);assertEquals(0,confirms);
     }
@@ -180,14 +183,14 @@ public class SecureDeliveryTest {
         InstallationTokenStore fresh=new InstallationTokenStore(temporary.getRoot().toPath().resolve("fresh.token"),base);
         InstallationClient client=new InstallationClient(base,http,verifier,fresh);
         char[] code=new char[43];Arrays.fill(code,'a');
-        try{client.open(code,password);fail();}catch(ActivationRequired expected){}
+        try{client.open(code);fail();}catch(ActivationRequired expected){}
         assertFalse(fresh.exists());for(char c:code)assertEquals('\0',c);
         Arrays.fill(code,'a');
-        try{client.open(code,password);fail();}catch(ActivationRequired expected){}
+        try{client.open(code);fail();}catch(ActivationRequired expected){}
         assertFalse(fresh.exists());
     }
-    @Test public void productionTransportRejectsHttpAndForeignUploadHosts() throws Exception {
-        try{new HttpTransport().base(base.toString());fail();}catch(IOException expected){}
+    @Test public void productionTransportAllowsHttpApiAndRejectsForeignUploadHosts() throws Exception {
+        assertEquals(base,new HttpTransport().base(base.toString()));
         try{new HttpTransport().upload(artifact.path,artifact.size,URI.create("https://foreign.invalid/upload"),Collections.emptyMap());fail();}catch(IOException expected){}
         assertEquals(0,uploads);
     }

@@ -1,5 +1,6 @@
 package br.com.bancadoingresso.integrator.extraction;
 
+import br.com.bancadoingresso.integrator.util.ApplicationProperties;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDate;
@@ -31,11 +32,12 @@ public final class ExtractionOptions {
         this.timeoutSeconds = timeoutSeconds;
     }
 
-    public static ExtractionOptions fromSystemProperties() {
-        return new ExtractionOptions(Paths.get(System.getProperty("integrator.output", "exports")),
-            System.getProperty("integrator.installation", "local-esus"),
-            LocalDate.parse(System.getProperty("integrator.cutoff", LocalDate.now().toString())),
-            Integer.parseInt(System.getProperty("integrator.pageSize", "1000")),
-            Integer.parseInt(System.getProperty("integrator.timeoutSeconds", "30")));
+    public static ExtractionOptions fromApplicationProperties() {
+        String cutoff = ApplicationProperties.value("integrator.cutoff", "today");
+        return new ExtractionOptions(Paths.get(ApplicationProperties.value("integrator.output", "exports")),
+            ApplicationProperties.value("integrator.installation", "local-esus"),
+            "today".equalsIgnoreCase(cutoff) ? LocalDate.now() : LocalDate.parse(cutoff),
+            Integer.parseInt(ApplicationProperties.value("integrator.pageSize", "1000")),
+            Integer.parseInt(ApplicationProperties.value("integrator.timeoutSeconds", "30")));
     }
 }

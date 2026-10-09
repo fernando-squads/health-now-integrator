@@ -17,13 +17,13 @@ configuration decryptable by the JAR itself.
 | Component | Responsibility |
 | --- | --- |
 | `Application` / `ApplicationSwing` | Default desktop entry point, interactive credentials, background work and progress/error presentation. The console entry point is not the full delivery workflow. |
-| `InstallationForm` | API URL and transient activation/local-password input; no UUID or key-path fields. |
-| `InstallationTokenStore` / `KeyEnvelope` | API-origin-bound token custody under password-derived AES-256-GCM. |
+| `InstallationForm` | Transient activation input; API URL comes from `application.properties`; no UUID, key-path or local-password fields. |
+| `InstallationTokenStore` | API-origin-bound token custody in an owner-only local file. |
 | `InstallationClient` / `ApiSignatureVerifier` | Code-only activation, signed current-run discovery, signed upload validation and direct bearer authentication. |
 | `IntegratorService` | Authorized-run preflight, extraction, resumable delivery and stable receipt recovery. |
 | `ExtractionService` / JDBC repositories | Read-only extraction through connection factory and resource SQL; PEC version comes from the source database. |
 | `LoadFileWriter` | JSONL, manifest, reconciliation report and immutable ZIP with checksum. |
-| `FileAvailabilityAPI` / `HttpTransport` | Strict bounded JSON contracts, HTTPS, timeouts, no redirects and no raw remote error disclosure. |
+| `FileAvailabilityAPI` / `HttpTransport` | Strict bounded JSON contracts, HTTP/HTTPS API origins, HTTPS S3 uploads, timeouts, no redirects and safe display of structured API error messages. |
 | `S3Service` | Java standard HTTP streaming to an API-authorized presigned URL; no AWS SDK or AWS credential chain. |
 | `DeliveryJournal` | Atomic private recovery metadata bound to origin, installation, run, file, bytes and object key. |
 
@@ -37,15 +37,15 @@ batch acceptance, reconciliation or publication routes.
 
 The API issues a random opaque token after consuming a one-time activation code.
 The token and minimized metadata are stored under the current user's
-.health-now-integrator directory, in an origin-specific encrypted file with
-owner-only POSIX permissions or Windows ACL. AES-256-GCM uses PBKDF2-HMAC-SHA256
-(600,000 iterations, fresh salt and nonce) and API-origin authenticated data.
-The password (at least 12 characters) is never saved. Writes are atomic and locked.
+`.health-now-integrator` directory in an origin-specific file with owner-only
+POSIX permissions or Windows ACL. Writes are atomic and locked. The token is
+protected by the operating-system user account rather than a user-supplied local
+password; use an encrypted managed disk where workstation-at-rest protection is required.
 No local RSA pair or session proof exists. Existing legacy keystores are left
 untouched and are not reused; migration requires a new activation code.
-A compromised workstation or stolen file plus weak password remains a risk.
+A compromised workstation or a process running as the same local user remains a risk.
 
-API tokens, activation codes, database/local passwords and signed URLs are absent
+API tokens, activation codes, database passwords and signed URLs are absent
 from journals. Local clinical output is sensitive and retained for deliberate
 recovery; it is not encrypted by the ZIP format. Use an encrypted managed disk and
 an approved retention policy. No automatic deletion policy is invented here.

@@ -14,10 +14,9 @@ public final class InstallationClient {
     public InstallationClient(URI api,HttpTransport http,ApiSignatureVerifier verifier,InstallationTokenStore store) {
         this.api=api;this.http=http;this.verifier=verifier;this.store=store;
     }
-    public void open(char[] code,char[] password) throws IOException {
+    public void open(char[] code) throws IOException {
         try {
-            if(code.length==0) {credential=store.load(password);return;}
-            if(password.length<12)throw new IOException("A senha local deve ter pelo menos 12 caracteres.");
+            if(code.length==0) {credential=store.load();return;}
             JsonObject body=new JsonObject();body.addProperty("activation_code",new String(code).trim());
             Arrays.fill(code,'\0');
             JsonObject response;
@@ -26,7 +25,7 @@ public final class InstallationClient {
             verifier.verify(response,"health-now-installation-token-v1","installation_token_id","installation_token","expires_at");
             JsonObject candidate=response.deepCopy();candidate.addProperty("api",api.toString());
             InstallationTokenStore.validate(candidate,api);
-            try {store.save(candidate,password);}
+            try {store.save(candidate);}
             catch(IOException e){throw new IOException("Ativação aceita, mas o token não pôde ser salvo. Corrija as permissões locais e solicite um novo código antes de tentar novamente.");}
             credential=candidate;
         } finally {Arrays.fill(code,'\0');}

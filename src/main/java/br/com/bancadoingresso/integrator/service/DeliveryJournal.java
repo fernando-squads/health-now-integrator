@@ -1,5 +1,4 @@
 package br.com.bancadoingresso.integrator.service;
-import br.com.bancadoingresso.integrator.api.*;
 import com.google.gson.*;
 import java.io.*;
 import java.nio.ByteBuffer;

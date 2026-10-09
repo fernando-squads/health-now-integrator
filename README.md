@@ -11,8 +11,11 @@ mvn clean verify
 java -jar target/integrator-1.0.0-jar-with-dependencies.jar
 ```
 
-Enter the database connection, HTTPS API URL, one-time activation code and a local
-password. Later starts use the encrypted local token and do not require the code.
+Enter the database connection and, on first use, the one-time activation code. The
+HTTP or HTTPS API URL is packaged in `src/main/resources/application.properties`. Later
+starts use the local owner-only token file and do not require the code.
+The same file contains the non-secret extraction settings, including output
+directory, cutoff date, page size and timeout.
 The API resolves installation and run IDs: the user never enters UUIDs or generates
 keys. The JAR contains only the API public verification keyring, no shared secrets,
 private keys, AWS credentials or .env configuration.

@@ -175,11 +175,11 @@ homologation. Do not treat local generation or API custody as server publication
 
 ## Configuration and validation
 
-System properties:
+`src/main/resources/application.properties` contains the non-secret extraction settings:
 - `integrator.output`: output directory (default `exports`).
 - `integrator.installation`: installation ID (default `local-esus`, local testing only).
 - The delivery run UUID is resolved internally from the signed API response; it is not a user setting.
-- `integrator.cutoff`: inclusive date, default today in the local timezone.
+- `integrator.cutoff`: inclusive date in `yyyy-MM-dd`, or `today` for the local date.
 - `integrator.pageSize`: 1–10000, default 1000.
 - `integrator.timeoutSeconds`: per-query timeout, default 30.
 
@@ -195,9 +195,7 @@ The local schema was inspected on 2026-10-08; institutional/domain homologation 
 mvn test
 mvn -Desus.integration=true test
 mvn clean package
-java -Dintegrator.api=https://api.example.invalid \
-  -Dintegrator.cutoff=2026-10-08 \
-  -jar target/integrator-1.0.0-jar-with-dependencies.jar
+java -jar target/integrator-1.0.0-jar-with-dependencies.jar
 ```
 
 Database tests are opt-in and use `esus.host`, `esus.port`, `esus.database`,

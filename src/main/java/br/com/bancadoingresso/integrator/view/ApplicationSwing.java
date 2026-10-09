@@ -92,11 +92,10 @@ public class ApplicationSwing {
 		addField(panel, constraints, 4, "Usuário:", userField);
 		addField(panel, constraints, 5, "Senha:", passwordField);
 		installationForm = new InstallationForm();
-		constraints.gridx = 0; constraints.gridy = 6; constraints.gridwidth = 2;
-		constraints.fill = GridBagConstraints.HORIZONTAL; panel.add(installationForm, constraints);
+		JLabel activationCodeLabel = addField(panel, constraints, 6, "Código de ativação:", installationForm.code);
+		installationForm.attach(activationCodeLabel, panel);
 		addNextButton(panel, constraints, nextButton);
-		JTextField[] required = {urlField, portField, databaseField, userField, passwordField,
-            installationForm.api, installationForm.password};
+		JTextField[] required = {urlField, portField, databaseField, userField, passwordField};
 		updateNextButtonState(nextButton, required);
 		addRequiredFieldListener(nextButton, required);
 		installationForm.code.getDocument().addDocumentListener(new DocumentListener() {
@@ -104,7 +103,6 @@ public class ApplicationSwing {
 			public void removeUpdate(DocumentEvent e) { updateNextButtonState(nextButton, required); }
 			public void changedUpdate(DocumentEvent e) { updateNextButtonState(nextButton, required); }
 		});
-		installationForm.reactivate.addActionListener(e -> updateNextButtonState(nextButton, required));
 		nextButton.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent event) {
@@ -209,7 +207,7 @@ public class ApplicationSwing {
 					if (resume != null) { archive = service.resume(resume, message -> publish(message)); }
 					else {
 						DatabaseProperties.creatInstance(url, port, database, user, new String(password));
-						ExtractionOptions defaults = ExtractionOptions.fromSystemProperties();
+						ExtractionOptions defaults = ExtractionOptions.fromApplicationProperties();
 						ExtractionOptions options = new ExtractionOptions(defaults.output, input.installation, defaults.cutoff,
 							defaults.pageSize, defaults.timeoutSeconds, input.run);
 						archive = service.integrate(options, message -> publish(message));
@@ -299,7 +297,7 @@ public class ApplicationSwing {
 		panel.add(title, constraints);
 	}
 
-	private void addField(JPanel panel, GridBagConstraints constraints, int row, String labelText, JTextField field) {
+	private JLabel addField(JPanel panel, GridBagConstraints constraints, int row, String labelText, JTextField field) {
 		JLabel label = new JLabel(labelText);
 		label.setLabelFor(field);
 
@@ -314,6 +312,7 @@ public class ApplicationSwing {
 		constraints.weightx = 1;
 		constraints.fill = GridBagConstraints.HORIZONTAL;
 		panel.add(field, constraints);
+		return label;
 	}
 
 	private void addNextButton(JPanel panel, GridBagConstraints constraints, JButton nextButton) {

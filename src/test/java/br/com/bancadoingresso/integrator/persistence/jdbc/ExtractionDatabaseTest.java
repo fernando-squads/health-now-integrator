@@ -71,7 +71,7 @@ public class ExtractionDatabaseTest {
     }
 
     @Test public void fullExtractionReconcilesAndProducesVerifiedArchive() throws Exception {
-        ExtractionOptions options = ExtractionOptions.fromSystemProperties();
+        ExtractionOptions options = ExtractionOptions.fromApplicationProperties();
         Path archive;
         String expectedVersion;
         try (Connection connection = ConnectionFactory.openExtractionConnection()) {
