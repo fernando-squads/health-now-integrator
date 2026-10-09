@@ -96,9 +96,15 @@ public class ApplicationSwing {
 		constraints.fill = GridBagConstraints.HORIZONTAL; panel.add(installationForm, constraints);
 		addNextButton(panel, constraints, nextButton);
 		JTextField[] required = {urlField, portField, databaseField, userField, passwordField,
-            installationForm.api, installationForm.installation, installationForm.run, installationForm.keyPath, installationForm.password};
+            installationForm.api, installationForm.password};
 		updateNextButtonState(nextButton, required);
 		addRequiredFieldListener(nextButton, required);
+		installationForm.code.getDocument().addDocumentListener(new DocumentListener() {
+			public void insertUpdate(DocumentEvent e) { updateNextButtonState(nextButton, required); }
+			public void removeUpdate(DocumentEvent e) { updateNextButtonState(nextButton, required); }
+			public void changedUpdate(DocumentEvent e) { updateNextButtonState(nextButton, required); }
+		});
+		installationForm.reactivate.addActionListener(e -> updateNextButtonState(nextButton, required));
 		nextButton.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent event) {
@@ -182,6 +188,7 @@ public class ApplicationSwing {
 	}
 
 	private void showDatabaseConfigurationScreen(JPanel cards) {
+		installationForm.refresh();
 		CardLayout layout = (CardLayout) cards.getLayout();
 		layout.show(cards, DATABASE_CONFIGURATION_CARD);
 	}
@@ -191,13 +198,14 @@ public class ApplicationSwing {
 		new SwingWorker<Void, String>() {
 			private String errorMessage;
 			private Path archive;
+			private boolean activationRequired;
 
 			@Override
 			protected Void doInBackground() {
 				IntegratorService service = null;
 				try {
 					publish("Autenticando instalação");
-					service = input.connect();
+					service = input.connect(resume != null);
 					if (resume != null) { archive = service.resume(resume, message -> publish(message)); }
 					else {
 						DatabaseProperties.creatInstance(url, port, database, user, new String(password));
@@ -207,6 +215,7 @@ public class ApplicationSwing {
 						archive = service.integrate(options, message -> publish(message));
 					}
 				} catch (Exception e) {
+					activationRequired = e instanceof br.com.bancadoingresso.integrator.api.ActivationRequired;
 					errorMessage = e instanceof java.io.IOException ? e.getMessage()
                         : "Integração não confirmada. Verifique a configuração, a autorização e a conexão com o banco.";
 				} finally {
@@ -232,6 +241,7 @@ public class ApplicationSwing {
 					backButton.setVisible(true);
 					integrationPanel.revalidate();
 				} else {
+					if (activationRequired) installationForm.requireActivation();
 					showIntegrationError(errorMessage);
 				}
 			}
@@ -340,12 +350,13 @@ public class ApplicationSwing {
 	}
 
 	private void updateNextButtonState(JButton nextButton, JTextField... fields) {
+		installationForm.refresh();
 		for (JTextField field : fields) {
-			if (field.getText().trim().isEmpty()) {
+			if (field instanceof JPasswordField ? field.getDocument().getLength() == 0 : field.getText().trim().isEmpty()) {
 				nextButton.setEnabled(false);
 				return;
 			}
 		}
-		nextButton.setEnabled(true);
+		nextButton.setEnabled(installationForm.ready());
 	}
 }

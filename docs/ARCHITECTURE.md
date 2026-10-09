@@ -8,8 +8,8 @@ confirms custody. Registration is not clinical processing or publication.
 
 On 2026-10-08 the owner explicitly replaced the proposed mTLS enrollment with
 native installation authentication: one-time activation, an individual revocable
-key and short-lived installation tokens. ADM/professional sessions cannot be used
-as installation sessions. The distributed JAR contains no secret or encrypted
+opaque token. The API signs responses with its private RSA key; only the public
+verification keyring is bundled in the JAR. ADM sessions cannot impersonate devices. The distributed JAR contains no secret or encrypted
 configuration decryptable by the JAR itself.
 
 ## Components and boundaries
@@ -17,9 +17,9 @@ configuration decryptable by the JAR itself.
 | Component | Responsibility |
 | --- | --- |
 | `Application` / `ApplicationSwing` | Default desktop entry point, interactive credentials, background work and progress/error presentation. The console entry point is not the full delivery workflow. |
-| `InstallationForm` | Public API/installation/run settings and transient activation/local-password input. |
-| `InstallationKey` / `KeyEnvelope` | Locally generated RSA-3072 identity, API/installation binding, password-protected encrypted key custody. |
-| `InstallationSessionClient` | Signed activation and nonce/timestamp session proofs; token cached only in memory. |
+| `InstallationForm` | API URL and transient activation/local-password input; no UUID or key-path fields. |
+| `InstallationTokenStore` / `KeyEnvelope` | API-origin-bound token custody under password-derived AES-256-GCM. |
+| `InstallationClient` / `ApiSignatureVerifier` | Code-only activation, signed current-run discovery, signed upload validation and direct bearer authentication. |
 | `IntegratorService` | Authorized-run preflight, extraction, resumable delivery and stable receipt recovery. |
 | `ExtractionService` / JDBC repositories | Read-only extraction through connection factory and resource SQL; PEC version comes from the source database. |
 | `LoadFileWriter` | JSONL, manifest, reconciliation report and immutable ZIP with checksum. |
@@ -35,12 +35,15 @@ batch acceptance, reconciliation or publication routes.
 
 ## Local security and recovery
 
-The key is generated on first use and stored in a local JCEKS file with restricted
-POSIX permissions or owner-only Windows ACL. Its private bytes are additionally
-encrypted with AES-256-GCM and PBKDF2-HMAC-SHA256 (600,000 iterations, fresh salt and
-nonce). The user's password (minimum 12 characters) is never persisted. AAD binds
-the envelope to the API origin and installation. This is not hardware-backed key
-custody: a compromised desktop or stolen file plus weak password remains a risk.
+The API issues a random opaque token after consuming a one-time activation code.
+The token and minimized metadata are stored under the current user's
+.health-now-integrator directory, in an origin-specific encrypted file with
+owner-only POSIX permissions or Windows ACL. AES-256-GCM uses PBKDF2-HMAC-SHA256
+(600,000 iterations, fresh salt and nonce) and API-origin authenticated data.
+The password (at least 12 characters) is never saved. Writes are atomic and locked.
+No local RSA pair or session proof exists. Existing legacy keystores are left
+untouched and are not reused; migration requires a new activation code.
+A compromised workstation or stolen file plus weak password remains a risk.
 
 API tokens, activation codes, database/local passwords and signed URLs are absent
 from journals. Local clinical output is sensitive and retained for deliberate
@@ -55,7 +58,7 @@ or authorized key fails closed. See [Load delivery](LOAD_DELIVERY.md).
 ## Verification and deployment boundaries
 
 Maven builds target Java 8 with UTF-8 source encoding. Tests cover extraction,
-local synthetic HTTP, protected key custody, request validation and delivery
+local synthetic HTTP, protected token custody, request validation and delivery
 recovery. Real e-SUS tests are explicit opt-in; delivery tests use no AWS or patient
 data. Visual Swing behavior and Windows ACL behavior require platform validation.
 The API migrations, private versioned S3 bucket, workload IAM, HTTPS deployment,

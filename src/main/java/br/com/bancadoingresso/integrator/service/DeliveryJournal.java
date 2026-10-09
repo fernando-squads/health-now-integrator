@@ -33,7 +33,7 @@ final class DeliveryJournal {
     private int generation() { return data.get("generation").getAsBigDecimal().intValueExact(); }
     String key(String purpose) {
         String generation = "authorize".equals(purpose) ? Integer.toString(generation()) : "0";
-        return InstallationKey.hash((data.get("installation_id").getAsString() + ":" + data.get("run_id").getAsString() + ":"
+        return br.com.bancadoingresso.integrator.util.Digests.sha256((data.get("installation_id").getAsString() + ":" + data.get("run_id").getAsString() + ":"
             + data.get("file_id").getAsString() + ":" + data.get("sha256").getAsString() + ":" + purpose + ":" + generation).getBytes(StandardCharsets.UTF_8));
     }
     String operation(String purpose) { return UUID.nameUUIDFromBytes(key(purpose).getBytes(StandardCharsets.UTF_8)).toString(); }

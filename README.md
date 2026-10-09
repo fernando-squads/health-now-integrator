@@ -1,43 +1,27 @@
 # Health Now Integrator
 
-Aplicação Java responsável pela integração de serviços do Health Now.
+Java 8 Swing application for read-only PostgreSQL extraction and secure file delivery.
 
-## Requisitos
+## Build and run
 
-- Java 8
-- Maven 3.6 ou superior
-- PostgreSQL (quando a integração com banco de dados for configurada)
-
-## Compilar
+Use a Java 8 JDK (not only a JRE) and Maven:
 
 ```bash
-mvn clean compile
-```
-
-## Executar
-
-```bash
-mvn clean package
+mvn clean verify
 java -jar target/integrator-1.0.0-jar-with-dependencies.jar
 ```
 
-## Dependências
+Enter the database connection, HTTPS API URL, one-time activation code and a local
+password. Later starts use the encrypted local token and do not require the code.
+The API resolves installation and run IDs: the user never enters UUIDs or generates
+keys. The JAR contains only the API public verification keyring, no shared secrets,
+private keys, AWS credentials or .env configuration.
 
-O projeto utiliza o driver JDBC do PostgreSQL (`org.postgresql:postgresql`).
+The integrator generates immutable JSONL, manifest, reconciliation report and ZIP
+files under exports. It verifies signed API responses, uploads using a short-lived
+S3 authorization and confirms availability. Use **Retomar arquivo...** to recover
+an existing ZIP without querying the source again. Registration means custody,
+not processing or publication; the Scheduler performs those subsequent stages.
 
-## Extração local
-
-Após informar a conexão e clicar em Próximo, o integrador consulta o banco em modo
-somente leitura e gera arquivos JSONL, manifesto, relatório de reconciliação e um ZIP
-em `exports/<run_id>/`. Informe também a API HTTPS, instalação e execução autorizada.
-No primeiro uso, ative a identidade com o código emitido pelo administrador e uma
-senha local forte. O andamento aparece na tela.
-
-Configuração, consultas, relacionamentos e testes: [Database extraction](docs/DATABASE_EXTRACTION.md).
-
-O `IntegratorService` solicita uma autorização temporária à API, envia o ZIP ao S3
-e confirma sua disponibilidade. O JAR não utiliza `.env`, credenciais AWS ou login
-ADM. A chave individual é gerada e protegida localmente. Use **Retomar ZIP** para
-recuperar uma entrega sem gerar outro arquivo. Registro não significa carga
-processada: o processamento pertence ao Scheduler.
-Veja [Load delivery](docs/LOAD_DELIVERY.md) e [Architecture](docs/ARCHITECTURE.md).
+See [Database extraction](docs/DATABASE_EXTRACTION.md),
+[Secure delivery](docs/LOAD_DELIVERY.md) and [Architecture](docs/ARCHITECTURE.md).

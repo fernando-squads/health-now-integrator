@@ -31,7 +31,7 @@ public final class IntegratorService {
         this.uploader = java.util.Objects.requireNonNull(uploader);
     }
     public synchronized Path integrate(ExtractionOptions options, Consumer<String> status) throws SQLException, IOException {
-        if (options.runId == null) throw new IOException("Informe a execução autorizada pela API.");
+        if (options.runId == null) throw new IOException("A API não retornou uma execução autorizada.");
         api.preflight(options.installationId, options.runId);
         if (pendingArchive == null) pendingArchive = generator.generate(options, status);
         LoadArtifact artifact = LoadArtifact.read(pendingArchive);
