@@ -23,8 +23,8 @@ public final class InstallationTokenStore {
         try {
             if (data.get("protocol_version").getAsBigDecimal().intValueExact() != 1
                     || !api.toString().equals(ApiSignatureVerifier.text(data,"api"))
-                    || !ApiSignatureVerifier.text(data,"installation_token").matches("[A-Za-z0-9_-]{43}")) throw new ActivationRequired();
-            ApiSignatureVerifier.uuid(data,"installation_token_id");
+                    || !ApiSignatureVerifier.text(data,"access_token").matches("esb1\\.[A-Za-z0-9_-]{43}")) throw new ActivationRequired();
+            ApiSignatureVerifier.uuid(data,"import_id");
             Instant expiry = OffsetDateTime.parse(ApiSignatureVerifier.text(data,"expires_at")).toInstant();
             if (!expiry.isAfter(Instant.now()) || expiry.isAfter(Instant.now().plusSeconds(366L*86400))) throw new ActivationRequired();
         } catch (RuntimeException e) { throw new ActivationRequired(); }
@@ -32,7 +32,7 @@ public final class InstallationTokenStore {
     public JsonObject load() throws IOException { return access(null); }
     public void save(JsonObject response) throws IOException {
         JsonObject data = new JsonObject(); data.addProperty("protocol_version",1); data.addProperty("api",api.toString());
-        for (String field : new String[]{"installation_token_id","installation_token","expires_at"}) data.addProperty(field,ApiSignatureVerifier.text(response,field));
+        for (String field : new String[]{"import_id","access_token","expires_at"}) data.addProperty(field,ApiSignatureVerifier.text(response,field));
         validate(data,api); access(data);
     }
     private synchronized JsonObject access(JsonObject data) throws IOException {

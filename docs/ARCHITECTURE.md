@@ -19,7 +19,7 @@ configuration decryptable by the JAR itself.
 | `Application` / `ApplicationSwing` | Default desktop entry point, interactive credentials, background work and progress/error presentation. The console entry point is not the full delivery workflow. |
 | `InstallationForm` | Transient activation input; API URL comes from `application.properties`; no UUID, key-path or local-password fields. |
 | `InstallationTokenStore` | API-origin-bound token custody in an owner-only local file. |
-| `InstallationClient` / `ApiSignatureVerifier` | Code-only activation, signed current-run discovery, signed upload validation and direct bearer authentication. |
+| `InstallationClient` / `ApiSignatureVerifier` | Bootstrap activation code, import discovery, signed upload authorization and direct Bearer authentication. |
 | `IntegratorService` | Authorized-run preflight, extraction, resumable delivery and stable receipt recovery. |
 | `ExtractionService` / JDBC repositories | Read-only extraction through connection factory and resource SQL; PEC version comes from the source database. |
 | `LoadFileWriter` | JSONL, manifest, reconciliation report and immutable ZIP with checksum. |
@@ -27,7 +27,7 @@ configuration decryptable by the JAR itself.
 | `S3Service` | Java standard HTTP streaming to an API-authorized presigned URL; no AWS SDK or AWS credential chain. |
 | `DeliveryJournal` | Atomic private recovery metadata bound to origin, installation, run, file, bytes and object key. |
 
-The API alone resolves bucket/key, checks current installation and run authority,
+The API alone resolves bucket/key, checks bootstrap-import authority,
 presigns PUT, verifies S3 HEAD and atomically writes receipt plus pending Scheduler
 intent. AWS credentials and signing authority never cross into the desktop.
 The Scheduler is the only load-processing component; this client does not invoke

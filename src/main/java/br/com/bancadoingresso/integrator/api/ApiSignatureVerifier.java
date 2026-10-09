@@ -7,9 +7,11 @@ import java.security.*;
 import java.security.interfaces.RSAPublicKey;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.*;
+import java.util.logging.Logger;
 
 /** Public verification keys only. HTTPS and response signatures are independent. */
 public final class ApiSignatureVerifier {
+    private static final Logger LOG = Logger.getLogger(ApiSignatureVerifier.class.getName());
     private final Map<String, PublicKey> keys;
     ApiSignatureVerifier(Map<String, PublicKey> keys) { this.keys = Collections.unmodifiableMap(new HashMap<String, PublicKey>(keys)); }
     public static ApiSignatureVerifier bundled() throws IOException {
@@ -36,7 +38,7 @@ public final class ApiSignatureVerifier {
             PublicKey key = keys.get(id); if (key == null) throw new ActivationRequired();
             StringBuilder bytes = new StringBuilder(kind).append("\n1\n").append(id);
             for (String field : fields) bytes.append('\n').append(text(response, field));
-            if ("health-now-upload-authorization-v1".equals(kind)) {
+            if ("health-now-upload-authorization-v1".equals(kind) || "health-now-bootstrap-upload-v1".equals(kind)) {
                 TreeMap<String, String> headers = new TreeMap<String, String>();
                 for (Map.Entry<String, JsonElement> h : response.getAsJsonObject("required_headers").entrySet()) {
                     if (!h.getKey().matches("[a-z0-9-]+")) throw new ActivationRequired();
@@ -50,7 +52,10 @@ public final class ApiSignatureVerifier {
             if (payload.length > 65536 || signature.length() > 1500) throw new ActivationRequired();
             Signature verifier = Signature.getInstance("SHA256withRSA"); verifier.initVerify(key); verifier.update(payload);
             if (!verifier.verify(Base64.getDecoder().decode(signature))) throw new ActivationRequired();
-        } catch (Exception e) { throw new ActivationRequired(); }
+        } catch (Exception e) {
+            LOG.warning("eSUS signed response rejected kind=" + kind + " reason=invalid_or_untrusted_signature");
+            throw new ActivationRequired();
+        }
     }
     static String text(JsonObject object, String field) throws IOException {
         try {

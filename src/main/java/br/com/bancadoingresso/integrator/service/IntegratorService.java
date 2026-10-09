@@ -6,8 +6,8 @@ import br.com.bancadoingresso.integrator.persistence.ConnectionFactory;
 import java.io.IOException;
 import java.sql.*;
 import java.nio.channels.*;
-import java.nio.file.*;
 import java.time.Instant;
+import java.nio.file.*;
 import java.util.function.Consumer;
 
 public final class IntegratorService {
@@ -49,16 +49,8 @@ public final class IntegratorService {
             if (lock == null) throw new IOException("Arquivo já está sendo enviado.");
             DeliveryJournal journal = new DeliveryJournal(artifact, api.destination());
             for (int attempt = 0; attempt < 2; attempt++) {
-                FileStatus current = api.status(artifact);
-                if (current != null) {
-                    journal.pin(current.objectKey);
-                    if (current.registered()) { complete(journal, current, status); return; }
-                    if ("failed".equals(current.state)) throw new IOException("A API informou falha de processamento. Não gere outra carga sem revisão.");
-                    if (!current.expires.isAfter(Instant.now())) journal.renew();
-                }
                 status.accept("Solicitando autorização temporária de upload");
                 UploadAuthorization authorization = api.authorize(artifact, journal.operation("authorize"), journal.key("authorize"));
-                journal.pin(authorization.objectKey);
                 status.accept("Enviando arquivo ao S3");
                 try { uploader.upload(artifact, authorization); }
                 catch (HttpTransport.Failure failure) {
@@ -68,8 +60,8 @@ public final class IntegratorService {
                 journal.save("uploaded", null);
                 status.accept("Validando e registrando arquivo na API");
                 try {
-                    FileStatus receipt = api.confirm(artifact, authorization.objectKey, journal.operation("confirm"), journal.key("confirm"));
-                    if (!receipt.registered() || !receipt.objectKey.equals(authorization.objectKey)) throw new IOException("Registro não confirmado.");
+                    FileStatus receipt = api.confirm(artifact, "", journal.operation("confirm"), journal.key("confirm"));
+                    if (!receipt.registered()) throw new IOException("Registro não confirmado.");
                     complete(journal, receipt, status); return;
                 } catch (HttpTransport.Failure failure) {
                     if (failure.status == 409 && attempt == 0 && !authorization.expiresAt.isAfter(Instant.now())) continue;

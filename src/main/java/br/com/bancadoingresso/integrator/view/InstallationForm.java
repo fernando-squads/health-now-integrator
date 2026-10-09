@@ -62,7 +62,7 @@ final class InstallationForm {
             InstallationClient client=new InstallationClient(origin,http,ApiSignatureVerifier.bundled(),new InstallationTokenStore(InstallationTokenStore.defaultPath(origin),origin));
             client.open(code);
             // Recovery must remain possible after a registered run has advanced.
-            if(!resume){InstallationClient.CurrentRun current=client.current();installation=current.installation;run=current.run;}
+            if(!resume){InstallationClient.CurrentRun current=client.current();installation=current.importId;run=current.importId;}
             return new IntegratorService(new FileAvailabilityAPI(client),http);
         }
         void clear(){Arrays.fill(code,'\0');}

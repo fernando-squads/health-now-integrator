@@ -44,6 +44,7 @@ public class ApplicationSwing {
 	private JScrollPane errorScrollPane;
 	private JTextArea errorTextArea;
 	private JButton backButton;
+	private JButton finishButton;
 	private JPanel integrationPanel;
 	private InstallationForm installationForm;
 	private Path pendingArchive;
@@ -152,6 +153,14 @@ public class ApplicationSwing {
 				showDatabaseConfigurationScreen(cards);
 			}
 		});
+		finishButton = new JButton("Finalizar");
+		finishButton.setVisible(false);
+		finishButton.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent event) {
+				System.exit(0);
+			}
+		});
 
 		GridBagConstraints constraints = new GridBagConstraints();
 		constraints.gridx = 0;
@@ -175,6 +184,7 @@ public class ApplicationSwing {
 		constraints.anchor = GridBagConstraints.EAST;
 		constraints.fill = GridBagConstraints.NONE;
 		integrationPanel.add(backButton, constraints);
+		integrationPanel.add(finishButton, constraints);
 
 		return integrationPanel;
 	}
@@ -236,7 +246,7 @@ public class ApplicationSwing {
 					errorTextArea.setText("Arquivo registrado: " + archive.toAbsolutePath()
                         + "\nO registro não significa que a carga foi processada ou publicada.");
 					errorScrollPane.setVisible(true);
-					backButton.setVisible(true);
+					finishButton.setVisible(true);
 					integrationPanel.revalidate();
 				} else {
 					if (activationRequired) installationForm.requireActivation();
@@ -283,6 +293,7 @@ public class ApplicationSwing {
 		errorTextArea.setText("");
 		errorScrollPane.setVisible(false);
 		backButton.setVisible(false);
+		finishButton.setVisible(false);
 	}
 
 	private void addTitle(JPanel panel, GridBagConstraints constraints) {
