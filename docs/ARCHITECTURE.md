@@ -1,5 +1,15 @@
 # Health Now Integrator Architecture
 
+## Professional phone extension (2026-10-13)
+
+The producer emits `local-jsonl-2` / `esus-local-2`, adding nullable
+`nu_telefone` from `tb_prof` to the explicit operational-professional projection.
+JDBC and JSONL preserve source formatting, null, blank and invalid text. Scheduler
+classifies bounded values privately; no authentication contact is established.
+Deploy API's additive migration and the dual-version Scheduler before this producer.
+Retained v1 artifacts remain readable by the new Scheduler without inferred contacts.
+No phone value enters logs, public endpoints, audit or production-data fixtures.
+
 ## Scope and decision
 
 The Java 8 Swing application extracts an immutable local ZIP from PostgreSQL,

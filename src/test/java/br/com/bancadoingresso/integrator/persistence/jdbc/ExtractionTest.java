@@ -16,6 +16,39 @@ import static org.junit.Assert.*;
 public class ExtractionTest {
     @Rule public TemporaryFolder temporary = new TemporaryFolder();
 
+    @Test public void professionalPhoneProjectionPreservesSourceValuesInJsonl() throws Exception {
+        String sql = SqlQueryLoader.load("/queries/reference/operational-professional-find-page.sql");
+        assertTrue(sql.contains("s.nu_telefone"));
+        String synthetic = String.join("", Collections.nCopies(10, "0"));
+        for (String value : Arrays.asList(synthetic, null, "", "invalid")) {
+            final String phone = value;
+            ResultSetMetaData metadata = (ResultSetMetaData) java.lang.reflect.Proxy.newProxyInstance(
+                getClass().getClassLoader(), new Class<?>[]{ResultSetMetaData.class}, (proxy, method, args) -> {
+                    switch (method.getName()) {
+                        case "getColumnCount": return 2;
+                        case "getColumnLabel": return ((Integer)args[0]) == 1 ? "source_id" : "nu_telefone";
+                        case "getColumnType": return Types.VARCHAR;
+                        case "getColumnTypeName": return "varchar";
+                        default: return null;
+                    }
+                });
+            ResultSet result = (ResultSet) java.lang.reflect.Proxy.newProxyInstance(
+                getClass().getClassLoader(), new Class<?>[]{ResultSet.class}, (proxy, method, args) -> {
+                    switch (method.getName()) {
+                        case "getMetaData": return metadata;
+                        case "getObject": return ((Integer)args[0]) == 1 ? 1L : phone;
+                        case "getBoolean": return false;
+                        default: return null;
+                    }
+                });
+            ExtractionRecord record = new ReferenceJDBC(null, 5).read(result);
+            StringWriter text = new StringWriter();
+            try (BufferedWriter output = new BufferedWriter(text)) { new LoadFileWriter().record(output, record); }
+            JsonElement stored = JsonParser.parseString(text.toString()).getAsJsonObject().get("nu_telefone");
+            assertTrue(phone == null ? stored.isJsonNull() : phone.equals(stored.getAsString()));
+        }
+    }
+
     @Test public void allResourcesLoadAndAreExplicitProjections() throws Exception {
         Set<String> entities = new HashSet<String>();
         for (ExtractionRepository repository : ExtractionService.repositories(null, 30)) {
