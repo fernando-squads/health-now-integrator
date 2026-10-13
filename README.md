@@ -9,6 +9,8 @@ Use a Java 8 JDK (not only a JRE) and Maven:
 ```bash
 mvn clean verify
 java -jar target/integrator-1.0.0-jar-with-dependencies.jar
+# Para o fluxo interativo no terminal:
+java -jar target/integrator-1.0.0-jar-with-dependencies.jar console
 ```
 
 Enter the database connection and, on first use, the one-time activation code. The

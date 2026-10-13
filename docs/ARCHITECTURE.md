@@ -26,7 +26,7 @@ configuration decryptable by the JAR itself.
 
 | Component | Responsibility |
 | --- | --- |
-| `Application` / `ApplicationSwing` | Default desktop entry point, interactive credentials, background work and progress/error presentation. The console entry point is not the full delivery workflow. |
+| `Application` / `ApplicationSwing` / `ApplicationConsole` | Desktop and console entry points collect interactive credentials, run delivery and report progress/errors. |
 | `InstallationForm` | Transient activation input; API URL comes from `application.properties`; no UUID, key-path or local-password fields. |
 | `InstallationTokenStore` | API-origin-bound token custody in an owner-only local file. |
 | `InstallationClient` / `ApiSignatureVerifier` | Bootstrap activation code, import discovery, signed upload authorization and direct Bearer authentication. |
