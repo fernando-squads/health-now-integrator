@@ -16,13 +16,22 @@ public final class LoadFileWriter {
 
     public Path createRunDirectory(Path output, String runId) throws IOException {
         Files.createDirectories(output);
-        Path path = output.resolve(runId + ".partial");
-        if (Files.getFileStore(output).supportsFileAttributeView("posix")) {
-            return Files.createDirectory(path, PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwx------")));
+        for (int attempt = 0; attempt < 10000; attempt++) {
+            String suffix = attempt == 0 ? "" : "-retry-" + attempt;
+            Path path = output.resolve(runId + suffix + ".partial");
+            try {
+                if (Files.getFileStore(output).supportsFileAttributeView("posix")) {
+                    return Files.createDirectory(path,
+                        PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwx------")));
+                }
+                Files.createDirectory(path);
+                br.com.bancadoingresso.integrator.util.ProtectedFiles.restrict(path);
+                return path;
+            } catch (FileAlreadyExistsException ignored) {
+                // Preserve failed attempts for diagnosis and create a fresh immutable work directory.
+            }
         }
-        Files.createDirectory(path);
-        br.com.bancadoingresso.integrator.util.ProtectedFiles.restrict(path);
-        return path;
+        throw new IOException("Não foi possível criar um diretório para uma nova tentativa de extração.");
     }
 
     public BufferedWriter open(Path path) throws IOException {
@@ -86,7 +95,12 @@ public final class LoadFileWriter {
     }
 
     public Path complete(Path partial, String runId) throws IOException {
-        Path target = partial.resolveSibling(runId);
+        String partialName = partial.getFileName().toString();
+        String suffix = ".partial";
+        if (!partialName.startsWith(runId) || !partialName.endsWith(suffix)) {
+            throw new IOException("Diretório parcial inválido para a execução.");
+        }
+        Path target = partial.resolveSibling(partialName.substring(0, partialName.length() - suffix.length()));
         if (Files.exists(target)) throw new FileAlreadyExistsException(target.toString());
         return Files.move(partial, target);
     }
