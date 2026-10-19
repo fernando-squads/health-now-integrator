@@ -16,17 +16,18 @@ import static org.junit.Assert.*;
 public class ExtractionTest {
     @Rule public TemporaryFolder temporary = new TemporaryFolder();
 
-    @Test public void professionalPhoneProjectionPreservesSourceValuesInJsonl() throws Exception {
-        String sql = SqlQueryLoader.load("/queries/reference/operational-professional-find-page.sql");
-        assertTrue(sql.contains("s.nu_telefone"));
-        String synthetic = String.join("", Collections.nCopies(10, "0"));
-        for (String value : Arrays.asList(synthetic, null, "", "invalid")) {
-            final String phone = value;
+    @Test public void patientContactProjectionPreservesSourceValuesInJsonl() throws Exception {
+        String sql = SqlQueryLoader.load("/queries/registration/find-page.sql");
+        assertTrue(sql.contains("s.nu_celular AS nu_telefone_celular"));
+        assertTrue(sql.contains("citizen.nu_telefone_contato"));
+        assertTrue(sql.contains("s.no_email"));
+        for (String value : Arrays.asList("0000000000", null, "", "invalid@example")) {
+            final String contact = value;
             ResultSetMetaData metadata = (ResultSetMetaData) java.lang.reflect.Proxy.newProxyInstance(
                 getClass().getClassLoader(), new Class<?>[]{ResultSetMetaData.class}, (proxy, method, args) -> {
                     switch (method.getName()) {
-                        case "getColumnCount": return 2;
-                        case "getColumnLabel": return ((Integer)args[0]) == 1 ? "source_id" : "nu_telefone";
+                        case "getColumnCount": return 4;
+                        case "getColumnLabel": return new String[] {"source_id", "nu_telefone_celular", "nu_telefone_contato", "no_email"}[(Integer)args[0] - 1];
                         case "getColumnType": return Types.VARCHAR;
                         case "getColumnTypeName": return "varchar";
                         default: return null;
@@ -36,7 +37,7 @@ public class ExtractionTest {
                 getClass().getClassLoader(), new Class<?>[]{ResultSet.class}, (proxy, method, args) -> {
                     switch (method.getName()) {
                         case "getMetaData": return metadata;
-                        case "getObject": return ((Integer)args[0]) == 1 ? 1L : phone;
+                        case "getObject": return ((Integer)args[0]) == 1 ? 1L : contact;
                         case "getBoolean": return false;
                         default: return null;
                     }
@@ -44,8 +45,11 @@ public class ExtractionTest {
             ExtractionRecord record = new ReferenceJDBC(null, 5).read(result);
             StringWriter text = new StringWriter();
             try (BufferedWriter output = new BufferedWriter(text)) { new LoadFileWriter().record(output, record); }
-            JsonElement stored = JsonParser.parseString(text.toString()).getAsJsonObject().get("nu_telefone");
-            assertTrue(phone == null ? stored.isJsonNull() : phone.equals(stored.getAsString()));
+            JsonObject stored = JsonParser.parseString(text.toString()).getAsJsonObject();
+            for (String field : Arrays.asList("nu_telefone_celular", "nu_telefone_contato", "no_email")) {
+                JsonElement storedValue = stored.get(field);
+                assertTrue(contact == null ? storedValue.isJsonNull() : contact.equals(storedValue.getAsString()));
+            }
         }
     }
 
@@ -92,6 +96,18 @@ public class ExtractionTest {
         try { writer.open(file); fail("Overwrite must fail"); }
         catch (FileAlreadyExistsException expected) { /* Immutable output. */ }
         assertTrue(Files.isDirectory(writer.complete(directory, "synthetic")));
+    }
+
+    @Test public void writerPreservesFailedAttemptBeforeRetryingSameRun() throws Exception {
+        LoadFileWriter writer = new LoadFileWriter();
+        Path first = writer.createRunDirectory(temporary.getRoot().toPath(), "synthetic");
+        Path retry = writer.createRunDirectory(temporary.getRoot().toPath(), "synthetic");
+
+        assertEquals("synthetic.partial", first.getFileName().toString());
+        assertEquals("synthetic-retry-1.partial", retry.getFileName().toString());
+        assertTrue(Files.isDirectory(first));
+        assertTrue(Files.isDirectory(writer.complete(retry, "synthetic")));
+        assertTrue(Files.isDirectory(first));
     }
 
     @Test public void invalidConfigurationIsRejected() {
