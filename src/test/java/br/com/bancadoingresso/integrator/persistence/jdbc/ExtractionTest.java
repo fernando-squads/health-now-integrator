@@ -16,18 +16,24 @@ import static org.junit.Assert.*;
 public class ExtractionTest {
     @Rule public TemporaryFolder temporary = new TemporaryFolder();
 
-    @Test public void patientContactProjectionPreservesSourceValuesInJsonl() throws Exception {
+    @Test public void patientContactAndAddressProjectionPreservesSourceValuesInJsonl() throws Exception {
         String sql = SqlQueryLoader.load("/queries/registration/find-page.sql");
-        assertTrue(sql.contains("s.nu_celular AS nu_telefone_celular"));
+        assertTrue(sql.contains("citizen.nu_telefone_residencial"));
+        assertTrue(sql.contains("citizen.nu_telefone_celular"));
         assertTrue(sql.contains("citizen.nu_telefone_contato"));
-        assertTrue(sql.contains("s.no_email"));
+        assertTrue(sql.contains("citizen.ds_email AS no_email"));
+        assertTrue(sql.contains("locality.no_localidade"));
+        assertTrue(sql.contains("state.no_uf"));
+        final List<String> fields = Arrays.asList("nu_telefone_residencial", "nu_telefone_celular",
+            "nu_telefone_contato", "no_email", "ds_cep", "ds_logradouro", "no_bairro",
+            "nu_numero", "no_localidade", "no_uf");
         for (String value : Arrays.asList("0000000000", null, "", "invalid@example")) {
             final String contact = value;
             ResultSetMetaData metadata = (ResultSetMetaData) java.lang.reflect.Proxy.newProxyInstance(
                 getClass().getClassLoader(), new Class<?>[]{ResultSetMetaData.class}, (proxy, method, args) -> {
                     switch (method.getName()) {
-                        case "getColumnCount": return 4;
-                        case "getColumnLabel": return new String[] {"source_id", "nu_telefone_celular", "nu_telefone_contato", "no_email"}[(Integer)args[0] - 1];
+                        case "getColumnCount": return fields.size() + 1;
+                        case "getColumnLabel": return ((Integer)args[0]) == 1 ? "source_id" : fields.get((Integer)args[0] - 2);
                         case "getColumnType": return Types.VARCHAR;
                         case "getColumnTypeName": return "varchar";
                         default: return null;
@@ -46,7 +52,7 @@ public class ExtractionTest {
             StringWriter text = new StringWriter();
             try (BufferedWriter output = new BufferedWriter(text)) { new LoadFileWriter().record(output, record); }
             JsonObject stored = JsonParser.parseString(text.toString()).getAsJsonObject();
-            for (String field : Arrays.asList("nu_telefone_celular", "nu_telefone_contato", "no_email")) {
+            for (String field : fields) {
                 JsonElement storedValue = stored.get(field);
                 assertTrue(contact == null ? storedValue.isJsonNull() : contact.equals(storedValue.getAsString()));
             }
